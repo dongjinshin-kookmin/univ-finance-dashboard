@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사립대학 교비회계 수지분석 대시보드</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- 모바일 상단 바 -->
+<header class="topbar">
+  <button class="hamburger" id="drawerToggle" aria-label="메뉴 열기">☰</button>
+  <span class="brand-mark">KMU</span>
+  <span class="topbar-title">교비회계 수지분석</span>
+</header>
+
+<div class="scrim" id="scrim"></div>
+
+<!-- 좌측 사이드바: 브랜드 · 대형 내비 · 필터 · 푸터 -->
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <span class="brand-mark">KMU</span>
+    <span class="brand-text">
+      <span class="bt-1">국민대학교</span>
+      <span class="bt-2">교비회계 수지분석</span>
+    </span>
+  </div>
+  <button class="collapse-btn" id="collapseBtn" title="사이드바 접기/펼치기" aria-label="사이드바 접기">«</button>
+
+  <nav class="mainnav" id="tabs"></nav>
+
+  <div class="filters-wrap">
+    <div class="filters-head">
+      <span class="fh-title">필터</span>
+      <button class="reset-btn" id="resetBtn">초기화</button>
+    </div>
+    <div class="filterbar" id="filterbar"></div>
+  </div>
+
+  <div class="sidebar-footer">
+    <button class="icon-btn" id="themeToggle" title="테마 전환">◐ 테마</button>
+    <span class="selftest-badge" id="selftestBadge"></span>
+    <span class="lite-badge" id="liteBadge">LITE · 목(目) 계정 생략</span>
+    <span class="sub" id="metaSub"></span>
+  </div>
+</aside>
+
+<!-- 메인 스테이지 -->
+<main class="stage">
+  <div class="stage-top">
+    <div class="stage-eyebrow" id="stageEyebrow"></div>
+    <h1 class="stage-title" id="stageTitle"></h1>
+  </div>
+  <div class="view" id="view"></div>
+</main>
+
+<!-- 데이터: build_html.py가 /*__DATA__*/ 토큰을 인라인 JSON으로 치환 -->
+<script id="DATA" type="application/json">/*__DATA__*/</script>
+<script src="format.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
