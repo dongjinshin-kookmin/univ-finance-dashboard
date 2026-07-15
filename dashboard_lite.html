@@ -666,6 +666,79 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
 .pos-banners { display: flex; flex-direction: column; gap: 10px; }
 .pos-banners .insight { font-size: 0.83rem; }
 
+/* ══ v5: 수지 구조 재구성 (병렬 트리 + 분석 패널) ══════════ */
+.t2-controls { align-items: flex-end; }
+.yearchips .yearchip { font-variant-numeric: tabular-nums; font-weight: 650; }
+.chip.disabled { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
+
+.t2-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(348px, 400px); gap: clamp(16px, 1.6vw, 22px); align-items: start; }
+.t2-trees { display: flex; flex-direction: column; gap: clamp(16px, 1.6vw, 22px); min-width: 0; }
+.t2-panel { position: sticky; top: 18px; display: flex; flex-direction: column; gap: 14px; }
+.t2-panel .card { padding: 16px 18px; }
+.t2-panel .card-head { margin-bottom: 12px; }
+@media (max-width: 1080px) {
+  .t2-grid { grid-template-columns: 1fr; }
+  .t2-panel { position: static; }
+}
+
+/* A 헤드라인 */
+.apanel-head { display: flex; flex-direction: column; gap: 8px; }
+.ap-crumb { font-size: 0.76rem; color: var(--muted); line-height: 1.5; }
+.ap-crumb b { color: var(--text-primary); font-weight: 700; }
+.ap-banrow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ap-ban { font-size: clamp(1.7rem, 2.4vw, 2.1rem); font-weight: 780; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; color: var(--text-primary); }
+.ap-sub { font-size: 0.77rem; color: var(--text-secondary); font-weight: 550; }
+.panel-spark { height: 46px; margin-top: 2px; }
+/* 중립 델타 필 (증감률 · 방향만, 좋다/나쁘다 미판정) */
+.delta-pill.neu { background: var(--surface-2); color: var(--text-secondary); }
+.delta-pill.neu .dp-vs { color: var(--muted); }
+
+/* B 포지션 래더 */
+.ladder { display: flex; flex-direction: column; gap: 5px; }
+.lad-row { display: grid; grid-template-columns: 1fr 78px 52px; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius-xs); cursor: pointer; transition: background .1s; }
+.lad-row:hover { background: var(--surface-2); }
+.lad-lab { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.lad-track { height: 8px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
+.lad-fill { height: 100%; border-radius: 999px; background: var(--series-4); }
+.lad-val { text-align: right; font-size: 0.82rem; font-weight: 720; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+/* D 3중 벤치마크 */
+.bench { display: flex; flex-direction: column; gap: 12px; }
+.bench-row { display: flex; flex-direction: column; gap: 5px; }
+.bench-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.bench-name { font-size: 0.79rem; font-weight: 680; color: var(--text-primary); }
+.bench-n { font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bench-meter { display: flex; align-items: center; gap: 9px; }
+.bench-diff { font-size: 0.74rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* E 학생 1인당 */
+.per-ban { display: flex; align-items: baseline; gap: 7px; margin-bottom: 12px; }
+.per-val { font-size: 1.5rem; font-weight: 760; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.per-unit { font-size: 0.76rem; color: var(--muted); font-weight: 600; }
+
+/* F 성격 진단 */
+.diag { display: flex; flex-direction: column; gap: 12px; }
+.diag-item { display: flex; flex-direction: column; gap: 5px; }
+.diag-lab { font-size: 0.72rem; color: var(--muted); font-weight: 700; letter-spacing: 0.01em; }
+.diag-txt { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; }
+.diag-txt b { color: var(--text-primary); font-weight: 750; }
+.diag-badge { display: inline-flex; align-items: center; font-size: 0.75rem; font-weight: 720; padding: 3px 11px; border-radius: 999px; }
+.diag-badge.rigid { background: var(--good-soft); color: var(--good); }
+.diag-badge.mid { background: var(--surface-2); color: var(--text-secondary); }
+.diag-badge.volatile { background: var(--warn-soft); color: var(--serious); }
+.diag .footnote { margin-top: 2px; }
+
+/* G 유사 대학 스니펫 */
+table.sim-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+table.sim-table td { padding: 7px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.sim-pos { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.74rem; width: 78px; }
+.sim-nm { width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.sim-nm .kmu-star { color: var(--kmu); font-weight: 800; }
+.sim-share { text-align: right; font-variant-numeric: tabular-nums; font-weight: 680; color: var(--text-primary); }
+table.sim-table tr.sim-self td { background: var(--surface-2); font-weight: 700; }
+table.sim-table tr.kmu-row td { background: var(--kmu-soft-2); }
+table.sim-table tr.sim-self.kmu-row td { background: var(--kmu-soft-2); font-weight: 750; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
@@ -1657,9 +1730,10 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
     scales: new Set(scalesAll),
     types: new Set(typesAll),
     y0: Y_FIRST, y1: Y_LAST,
-    t2_school: KMU_ID, t2_year: Y_LAST, t2_side: 'in',
-    t2_open: new Set(rootsOf('in').slice(0, 1).map(function (a) { return a.code; })),
-    t2_sel: '5100',
+    t2_school: KMU_ID, t2_year: Y_LAST,
+    t2_sel: { side: 'ex', code: '4100' },     // {side,code} — 수입/지출 어느 쪽이든 단일 선택
+    t2_open: new Set(['ex:4100', 'in:5100']), // "side:code" 확장 노드
+    t2_cmode: 'abs',                          // 추이 차트 토글: abs|share
     t3_metric: { type: 'kpi', name: '등록금의존율_총계' },
     t4_schools: [KMU_ID].concat(nonKmu.slice(0, 2)),
     t4_metric: '등록금의존율_총계',
@@ -2035,57 +2109,122 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
   }
 
   // ═══════════════════════════════════════════════════════
-  //  탭 2 — 수지 구조 (드릴다운 트리)
+  //  탭 2 — 수지 구조 (수입·지출 병렬 트리 + 분석 패널)
   // ═══════════════════════════════════════════════════════
+  // 운영/자산부채 관(館) 구분 (lv1 코드는 p=None 이라 코드셋으로 판정)
+  var IN_OP_ROOTS = ['5100', '5200', '5300', '5400'];
+  var EX_OP_ROOTS = ['4100', '4200', '4300', '4400', '4500', '4600'];
+  function ancestorChain(side, code) {          // [lv1 … code]
+    var chain = [], c = code;
+    while (c) { var a = ACC[side][c]; if (!a) break; chain.unshift(a); c = a.p; }
+    return chain;
+  }
+  function sectionOf(side, code) {               // 선택 계정이 속한 lv0 부문(운영/자산부채)
+    var chain = ancestorChain(side, code);
+    if (!chain.length) return null;
+    var lv1 = chain[0];
+    var opset = side === 'in' ? IN_OP_ROOTS : EX_OP_ROOTS;
+    if (opset.indexOf(lv1.code) >= 0)
+      return { code: side === 'in' ? 'OP_IN' : 'OP_EX', name: side === 'in' ? '운영수입' : '운영지출' };
+    return { code: side === 'in' ? 'AL_IN' : 'AL_EX', name: side === 'in' ? '자산·부채수입' : '자산·부채지출' };
+  }
+  function totCodeOf(side) { return side === 'in' ? 'T_IN' : 'T_EX'; }
+  function totWordOf(side) { return side === 'in' ? '총수입' : '총지출'; }
+  function breadcrumbChain(side, code) {
+    return ancestorChain(side, code).map(function (a) { return '<b>' + a.name + '</b>'; }).join(' › ');
+  }
+  function enrollOf(sid, yr) {                    // 해당 연도, 없으면 최근 가용
+    var e = schools[sid].enroll; if (!e) return null;
+    if (e[String(yr)] != null) return e[String(yr)];
+    for (var k = YEARS.length - 1; k >= 0; k--) { if (e[String(YEARS[k])] != null) return e[String(YEARS[k])]; }
+    return null;
+  }
+  // 선택 상태 정규화: 연도 가용성 + 값 없으면 관(lv1) 폴백
+  function normalizeStructSel() {
+    var sid = S.t2_school;
+    var avail = YEARS.filter(function (y) { return gv('in', 'T_IN', sid, y) != null || gv('ex', 'T_EX', sid, y) != null; });
+    if (avail.length && avail.indexOf(S.t2_year) < 0) S.t2_year = avail[avail.length - 1];
+    var sel = S.t2_sel;
+    if (gv(sel.side, sel.code, sid, S.t2_year) == null) {
+      var chain = ancestorChain(sel.side, sel.code);
+      if (chain.length && gv(sel.side, chain[0].code, sid, S.t2_year) != null)
+        S.t2_sel = { side: sel.side, code: chain[0].code };
+    }
+  }
+
   function renderStructure(v) {
-    var side = S.t2_side, sid = S.t2_school, yr = S.t2_year;
-    // 컨트롤
-    var schoolSel = h('select', { class: 'sel', onChange: function () { S.t2_school = +this.value; render(); } },
-      schools.map(function (s, i) { return h('option', { value: i, selected: i === sid ? 'selected' : null, text: s.n + (s.kmu ? ' ★' : '') }); }));
-    var yearSel = h('select', { class: 'sel', onChange: function () { S.t2_year = +this.value; render(); } },
-      YEARS.map(function (y) { return h('option', { value: y, selected: y === yr ? 'selected' : null, text: y + '년' }); }));
-    var sideToggle = h('div', { class: 'chip-row' }, [
-      h('button', { class: 'chip' + (side === 'in' ? ' on' : ''), text: '수입', onClick: function () { S.t2_side = 'in'; S.t2_sel = 'T_IN'; render(); } }),
-      h('button', { class: 'chip' + (side === 'ex' ? ' on' : ''), text: '지출', onClick: function () { S.t2_side = 'ex'; S.t2_sel = 'T_EX'; render(); } }),
+    normalizeStructSel();
+    var sid = S.t2_school, yr = S.t2_year, sel = S.t2_sel;
+    v.appendChild(structControls());
+    var grid = h('div', { class: 't2-grid' });
+    var trees = h('div', { class: 't2-trees' });
+    trees.appendChild(treeCard('in', sid, yr));
+    trees.appendChild(treeCard('ex', sid, yr));
+    grid.appendChild(trees);
+    grid.appendChild(renderAnalysisPanel(sel.side, sel.code, sid, yr));
+    v.appendChild(grid);
+  }
+
+  // ── 상단 컨트롤: 대학 검색(단일 선택) + 연도 칩 ──
+  function structControls() {
+    var sid = S.t2_school, yr = S.t2_year;
+    var searchWrap = h('div', { class: 'school-search' });
+    var input = h('input', { class: 'txt', type: 'text', placeholder: schools[sid].n + ' — 대학 검색…', style: 'width:260px', autocomplete: 'off' });
+    var drop = h('div', { class: 'ss-dropdown' }); drop.style.display = 'none';
+    searchWrap.appendChild(input); searchWrap.appendChild(drop);
+    var hits = [], active = -1;
+    function cand(q) { var out = []; schools.forEach(function (s, i) { if (q && s.n.indexOf(q) < 0) return; out.push(i); }); return out.slice(0, 12); }
+    function pick(i) { S.t2_school = i; render(); }
+    function draw() {
+      drop.innerHTML = ''; drop.style.display = 'block';
+      if (!hits.length) { drop.appendChild(h('div', { class: 'ss-empty', text: input.value.trim() ? '일치하는 대학이 없습니다' : '대학명을 입력하세요' })); return; }
+      hits.forEach(function (i, k) {
+        var o = h('div', { class: 'ss-opt' + (k === active ? ' active' : '') + (i === KMU_ID ? ' kmu' : ''),
+          html: '<span class="ss-nm">' + schools[i].n + (schools[i].kmu ? ' ★' : '') + '</span><span class="ss-region">' + schools[i].region + ' · ' + schools[i].scale + '</span>' });
+        o.addEventListener('mousedown', function (e) { e.preventDefault(); pick(i); });
+        o.addEventListener('mouseenter', function () { active = k; draw(); });
+        drop.appendChild(o);
+      });
+    }
+    function refr() { hits = cand(input.value.trim()); active = hits.length ? 0 : -1; draw(); }
+    input.addEventListener('input', refr); input.addEventListener('focus', refr);
+    input.addEventListener('blur', function () { setTimeout(function () { drop.style.display = 'none'; }, 150); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (hits.length) { active = (active + 1) % hits.length; draw(); } }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (hits.length) { active = (active - 1 + hits.length) % hits.length; draw(); } }
+      else if (e.key === 'Enter') { e.preventDefault(); if (active >= 0 && hits[active] != null) pick(hits[active]); }
+      else if (e.key === 'Escape') { drop.style.display = 'none'; }
+    });
+
+    var chips = h('div', { class: 'chip-row yearchips' });
+    YEARS.forEach(function (y) {
+      var avail = gv('in', 'T_IN', sid, y) != null || gv('ex', 'T_EX', sid, y) != null;
+      var b = h('button', { class: 'chip yearchip' + (y === yr ? ' on' : '') + (avail ? '' : ' disabled'), text: String(y),
+        onClick: avail ? function () { S.t2_year = y; render(); } : null });
+      if (!avail) b.setAttribute('disabled', 'disabled');
+      chips.appendChild(b);
+    });
+
+    return h('div', { class: 'row-controls t2-controls' }, [
+      ctrl('대학 (검색)', searchWrap),
+      ctrl('연도', chips),
+      LITE ? h('span', { class: 'pill warn', html: '<i></i>LITE: 목(目) 미표시' }) : null,
     ]);
-    v.appendChild(h('div', { class: 'row-controls' }, [
-      ctrl('대학', schoolSel), ctrl('연도', yearSel), ctrl('구분', sideToggle),
-      LITE ? h('span', { class: 'pill warn', html: '<i></i>LITE: 목(目) 미표시 → 관·항까지' }) : null,
-    ]));
+  }
 
-    var total = gv(side, side === 'in' ? 'T_IN' : 'T_EX', sid, yr) || 1;
-    // 브레드크럼
-    var selNode = ACC[side][S.t2_sel];
-    v.appendChild(breadcrumb(side, S.t2_sel));
-
-    var grid = h('div', { class: 'grid c2' });
-    // 트리
-    var treeCard = h('div', { class: 'card' }, [
-      h('h3', { text: (side === 'in' ? '수입' : '지출') + ' 계층 — ' + schools[sid].n + ' ' + yr + '년' }),
-      h('div', { class: 'card-sub', text: '총계 ' + F.krw(total) + ' · 관→항' + (LITE ? '' : '→목') + ' 드릴다운(행 클릭)' }),
+  // ── 계층 트리 카드 (수입/지출 각 1개) ──
+  function treeCard(side, sid, yr) {
+    var total = gv(side, totCodeOf(side), sid, yr) || 1;
+    var card = h('div', { class: 'card t2-treecard' }, [
+      cardHead(side === 'in' ? 'cap' : 'scale', side === 'in' ? 'var(--series-1)' : 'var(--series-3)',
+        (side === 'in' ? '수입' : '지출') + ' 계층',
+        schools[sid].n + ' · ' + yr + '년 · 총계 ' + F.krw(total) + ' · 관→항' + (LITE ? '' : '→목') + ' (행 클릭 선택)'),
     ]);
     var tree = h('div', { class: 'tree' });
     tree.appendChild(treeHeader());
     rootsOf(side).forEach(function (root, ri) { appendTreeNode(tree, side, root, sid, yr, total, 0, treeColor(ri)); });
-    treeCard.appendChild(tree);
-    grid.appendChild(treeCard);
-
-    // 선택 노드 시계열
-    var selCode = S.t2_sel;
-    var selAcc = ACC[side][selCode] || ACC[side][side === 'in' ? 'T_IN' : 'T_EX'];
-    var tsCard = h('div', { class: 'card' }, [
-      h('h3', { text: '선택 계정 추이 — ' + (selAcc ? selAcc.name : '') }),
-      h('div', { class: 'card-sub', text: schools[sid].n + ' 실선 · 코호트 중앙값 점선(동일 계정)' }),
-    ]);
-    var tsBox = chartBox(280); tsCard.appendChild(tsBox);
-    tsCard.appendChild(h('div', { class: 'legend' }, [
-      h('span', { class: 'lg', html: '<i style="background:' + (sid === KMU_ID ? 'var(--kmu)' : 'var(--series-1)') + '"></i>' + schools[sid].n }),
-      h('span', { class: 'lg', html: '<i class="dash" style="color:var(--muted)"></i>코호트 중앙값' }),
-    ]));
-    grid.appendChild(tsCard);
-    v.appendChild(grid);
-
-    drawNodeTrend(tsBox, side, selCode, sid);
+    card.appendChild(tree);
+    return card;
   }
   function ctrl(label, node) { return h('div', { class: 'ctrl' }, [h('label', { text: label }), node]); }
   function treeHeader() {
@@ -2104,13 +2243,15 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
     var yoy = (prev != null && prev !== 0) ? (val - prev) / prev : null;
     var kids = childrenOf(side, acc.code).filter(function (a) { return !(LITE && a.lv === 3); });
     var hasKids = kids.length > 0;
-    var open = S.t2_open.has(acc.code);
+    var okey = side + ':' + acc.code;
+    var open = S.t2_open.has(okey);
     var share = total ? val / total : 0;
+    var isSel = S.t2_sel.side === side && S.t2_sel.code === acc.code;
     var node = h('div', {
-      class: 'tnode' + (depth === 0 ? ' lv1' : '') + (hasKids ? ' clickable' : '') + (S.t2_sel === acc.code ? ' selected' : ''),
-      onClick: function (e) {
-        S.t2_sel = acc.code;
-        if (hasKids) { if (open) S.t2_open.delete(acc.code); else S.t2_open.add(acc.code); }
+      class: 'tnode' + (depth === 0 ? ' lv1' : '') + ' clickable' + (isSel ? ' selected' : ''),
+      onClick: function () {
+        S.t2_sel = { side: side, code: acc.code };
+        if (hasKids) { if (open) S.t2_open.delete(okey); else S.t2_open.add(okey); }
         render();
       }
     }, [
@@ -2122,35 +2263,243 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
       h('div', { class: 'tbar-wrap' }, [h('div', { class: 'tbar', style: 'width:' + (Math.max(1, share * 100)).toFixed(1) + '%;background:' + rootColor + ';opacity:' + (depth === 0 ? '1' : depth === 1 ? '0.72' : '0.5') })]),
       h('div', { class: 'tval', text: F.krw(val) }),
       h('div', { class: 'tshare', text: F.pct(share, 1) }),
+      h('div', { class: 'tyoy ' + (yoy == null ? '' : (yoy >= 0 ? 'up' : 'down')), text: yoy == null ? '—' : (yoy >= 0 ? '+' : '') + F.pct(yoy, 1) }),
     ]);
-    // yoy 별도 열 대신 tshare 옆에 붙이기 위해 grid 4열
-    node.appendChild(h('div', { class: 'tyoy ' + (yoy == null ? '' : (yoy >= 0 ? 'up' : 'down')), text: yoy == null ? '—' : F.pctPoint(yoy, 1) }));
     container.appendChild(node);
     if (hasKids && open) kids.forEach(function (k) { appendTreeNode(container, side, k, sid, yr, total, depth + 1, rootColor); });
   }
   function treeColor(ri) { return 'var(--series-' + ((ri % 8) + 1) + ')'; }
-  function breadcrumb(side, code) {
-    var chain = [], c = code;
-    while (c) { var a = ACC[side][c]; if (!a) break; chain.unshift(a); c = a.p; }
-    var totName = side === 'in' ? '자금수입총계' : '자금지출총계';
-    return h('div', { class: 'breadcrumb', html: totName + (chain.length ? ' › ' + chain.map(function (a) { return '<b>' + a.name + '</b>'; }).join(' › ') : '') });
+
+  // ═══════════════════════════════════════════════════════
+  //  분석 패널 (선택 계정 기준, sticky) — A~G
+  // ═══════════════════════════════════════════════════════
+  function renderAnalysisPanel(side, code, sid, yr) {
+    var panel = h('aside', { class: 't2-panel', id: 't2-panel' });
+    var acc = ACC[side][code];
+    if (!acc) { panel.appendChild(h('div', { class: 'card' }, [h('p', { class: 'hint', text: '트리에서 계정을 선택하세요.' })])); return panel; }
+    var val = gv(side, code, sid, yr), tot = gv(side, totCodeOf(side), sid, yr);
+    var share = (val != null && tot) ? val / tot : null;
+    panel.appendChild(headlineCard(side, code, sid, yr, val, tot, share));   // A
+    panel.appendChild(ladderCard(side, code, sid, yr, val));                 // B
+    panel.appendChild(trendCard(side, code, sid));                          // C
+    panel.appendChild(benchCard(side, code, sid, yr, share));               // D
+    var per = perStudentCard(side, code, sid, yr, val);                     // E
+    if (per) panel.appendChild(per);
+    panel.appendChild(diagCard(side, code, sid, yr, val));                   // F
+    panel.appendChild(simCard(side, code, sid, yr, share));                 // G
+    return panel;
   }
-  function drawNodeTrend(box, side, code, sid) {
-    var yrs = YEARS.filter(function (y) { return y >= S.y0 && y <= S.y1; });
-    var self = yrs.map(function (y) { return [y, gv(side, code, sid, y)]; });
-    var pop = filteredSchoolIds();
-    var mid = yrs.map(function (y) {
-      var st = stats(pop.map(function (p) { return gv(side, code, p, y); }));
-      return [y, st ? st.p50 : null];
+
+  // A — 헤드라인 (브레드크럼 · BAN · Δ전년 증감률 · 9개년 스파크라인)
+  function headlineCard(side, code, sid, yr, val, tot, share) {
+    var prev = gv(side, code, sid, yr - 1);
+    var rate = (val != null && prev != null && prev !== 0) ? (val - prev) / prev : null;
+    var spark = chartBox(46); spark.className = 'panel-spark';
+    var sideWord = side === 'in' ? '수입' : '지출';
+    var card = h('div', { class: 'card apanel-head' }, [
+      h('div', { class: 'ap-crumb', html: sideWord + ' › ' + breadcrumbChain(side, code) }),
+      h('div', { class: 'ap-banrow' }, [
+        h('div', { class: 'ap-ban', text: val == null ? '—' : F.krw(val) }),
+        h('span', { class: 'delta-pill neu', html: rate == null ? '—' :
+          ((rate >= 0 ? '▲' : '▼') + ' ' + F.pct(Math.abs(rate), 1) + ' <span class="dp-vs">vs ' + (yr - 1) + '</span>') }),
+      ]),
+      h('div', { class: 'ap-sub', text: (share == null ? schools[sid].n : totWordOf(side) + ' 대비 ' + F.pct(share, 1) + ' · ' + schools[sid].n + ' · ' + yr + '년') }),
+      spark,
+    ]);
+    C.sparkline(spark, { points: YEARS.map(function (y) { return [y, gv(side, code, sid, y)]; }),
+      color: side === 'in' ? 'var(--series-1)' : 'var(--series-3)', height: 46 });
+    return card;
+  }
+
+  // B — 포지션 래더 (상위 계층 구성비 계단, 클릭 시 이동)
+  function ladderRungs(side, code) {
+    var X = ACC[side][code], chain = ancestorChain(side, code), rungs = [];
+    if (X.lv >= 3) rungs.push({ label: chain[chain.length - 2].name + ' 대비', code: chain[chain.length - 2].code });
+    if (X.lv >= 2) rungs.push({ label: chain[0].name + '(관) 대비', code: chain[0].code });
+    if (X.lv >= 1) { var sec = sectionOf(side, code); if (sec) rungs.push({ label: sec.name + ' 대비', code: sec.code }); }
+    rungs.push({ label: (side === 'in' ? '자금수입총계' : '자금지출총계') + ' 대비', code: totCodeOf(side) });
+    return rungs;
+  }
+  function ladderCard(side, code, sid, yr, val) {
+    var body = h('div', { class: 'ladder' });
+    ladderRungs(side, code).forEach(function (r) {
+      var dv = gv(side, r.code, sid, yr);
+      var sh = (val != null && dv && dv !== 0) ? val / dv : null;
+      body.appendChild(h('div', { class: 'lad-row clickable', onClick: function () { S.t2_sel = { side: side, code: r.code }; render(); } }, [
+        h('div', { class: 'lad-lab', text: r.label }),
+        h('div', { class: 'lad-track' }, [h('div', { class: 'lad-fill', style: 'width:' + (sh == null ? 0 : Math.max(2, sh * 100)).toFixed(1) + '%' })]),
+        h('div', { class: 'lad-val', text: sh == null ? '—' : F.pct(sh, 1) }),
+      ]));
     });
-    C.line(box, {
-      height: 280, yZero: true,
-      series: [
-        { name: schools[sid].n, color: sid === KMU_ID ? 'var(--kmu)' : 'var(--series-1)', points: self, emphasize: true },
-        { name: '코호트 중앙값', color: 'var(--muted)', points: mid, dashed: true, dim: true },
-      ],
-      xTicks: yrs, yFmt: F.krwAxis, tipFmt: F.krw,
+    return h('div', { class: 'card' }, [
+      cardHead('structure', 'var(--series-4)', '포지션 래더', '상위 계층 대비 구성비 · 단계 클릭 시 이동'),
+      body,
+    ]);
+  }
+
+  // C — 추이 (절대액 | 구성비 토글)
+  function trendCard(side, code, sid) {
+    var mode = S.t2_cmode;
+    var toggle = h('div', { class: 'chip-row' }, [
+      h('button', { class: 'chip' + (mode === 'abs' ? ' on' : ''), text: '절대액', onClick: function () { S.t2_cmode = 'abs'; render(); } }),
+      h('button', { class: 'chip' + (mode === 'share' ? ' on' : ''), text: '구성비', onClick: function () { S.t2_cmode = 'share'; render(); } }),
+    ]);
+    var card = h('div', { class: 'card' }, [
+      cardHead('timeseries', 'var(--series-2)', '9개년 추이 — ' + ACC[side][code].name,
+        mode === 'share' ? (schools[sid].n + ' 실선 · 모집단 p25~p75 밴드 · p50 점선') : (schools[sid].n + ' 실선 · 모집단 중앙값 점선')),
+      toggle,
+    ]);
+    var box = chartBox(220); card.appendChild(box);
+    if (mode === 'share') {
+      var ins = shareTrendInsight(side, code, sid);
+      if (ins) card.appendChild(h('div', { class: 'insight neutral', style: 'margin-top:12px' }, [h('span', { text: ins }), h('span', { class: 'in-arrow', text: '→' })]));
+    }
+    drawStructTrend(box, side, code, sid, mode);
+    return card;
+  }
+  function drawStructTrend(box, side, code, sid, mode) {
+    var yrs = YEARS.slice(), pop = filteredSchoolIds(), totCode = totCodeOf(side);
+    var selfColor = sid === KMU_ID ? 'var(--kmu)' : 'var(--series-1)';
+    if (mode === 'abs') {
+      var self = yrs.map(function (y) { return [y, gv(side, code, sid, y)]; });
+      var mid = yrs.map(function (y) { var st = stats(pop.map(function (p) { return gv(side, code, p, y); })); return [y, st ? st.p50 : null]; });
+      C.line(box, { height: 220, yZero: true,
+        series: [{ name: schools[sid].n, color: selfColor, points: self, emphasize: true },
+                 { name: '모집단 중앙값', color: 'var(--muted)', points: mid, dashed: true, dim: true }],
+        xTicks: [2016, 2018, 2020, 2022, 2024], yFmt: F.krwAxis, tipFmt: F.krw });
+    } else {
+      var shr = function (p, y) { var vv = gv(side, code, p, y), tt = gv(side, totCode, p, y); return (vv != null && tt) ? vv / tt : null; };
+      var selfS = yrs.map(function (y) { return [y, shr(sid, y)]; });
+      var lo = [], hi = [], m2 = [];
+      yrs.forEach(function (y) { var st = stats(pop.map(function (p) { return shr(p, y); })); lo.push([y, st ? st.p25 : null]); hi.push([y, st ? st.p75 : null]); m2.push([y, st ? st.p50 : null]); });
+      C.line(box, { height: 220, yZero: true,
+        series: [{ name: schools[sid].n, color: selfColor, points: selfS, emphasize: true }],
+        band: { lo: lo, hi: hi, mid: m2, color: 'var(--band)' },
+        xTicks: [2016, 2018, 2020, 2022, 2024], yFmt: function (x) { return F.pct(x, 0); }, tipFmt: function (x) { return F.pct(x); } });
+    }
+  }
+  function shareTrendInsight(side, code, sid) {
+    var totCode = totCodeOf(side);
+    function shr(y) { var vv = gv(side, code, sid, y), tt = gv(side, totCode, sid, y); return (vv != null && tt) ? vv / tt : null; }
+    var first = null, last = null, fy, ly;
+    for (var i = 0; i < YEARS.length; i++) { var s = shr(YEARS[i]); if (s != null) { if (first == null) { first = s; fy = YEARS[i]; } last = s; ly = YEARS[i]; } }
+    if (first == null || last == null || fy === ly) return null;
+    var dp = (last - first) * 100;
+    return totWordOf(side) + ' 대비 비중이 ' + fy + '→' + ly + ' ' + (dp >= 0 ? '+' : '') + dp.toFixed(1) + '%p ' + (dp >= 0 ? '확대' : '축소');
+  }
+
+  // D — 3중 벤치마크 (모집단 · 같은 규모 · 같은 권역)
+  function benchCard(side, code, sid, yr, selfShare) {
+    var totCode = totCodeOf(side);
+    function shareVals(ids) { return ids.map(function (id) { var vv = gv(side, code, id, yr), tt = gv(side, totCode, id, yr); return (vv != null && tt) ? vv / tt : null; }); }
+    var allIds = schools.map(function (s, i) { return i; });
+    var groups = [
+      { name: '현재 필터 모집단', ids: filteredSchoolIds() },
+      { name: '같은 규모 · ' + schools[sid].scale, ids: allIds.filter(function (i) { return schools[i].scale === schools[sid].scale; }) },
+      { name: '같은 권역 · ' + schools[sid].region, ids: allIds.filter(function (i) { return schools[i].region === schools[sid].region; }) },
+    ];
+    var body = h('div', { class: 'bench' });
+    groups.forEach(function (g) {
+      var vals = shareVals(g.ids).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; });
+      var n = vals.length;
+      var mean = n ? vals.reduce(function (a, b) { return a + b; }, 0) / n : null;
+      var pctile = (n > 1 && selfShare != null) ? vals.filter(function (x) { return x < selfShare; }).length / (n - 1) : null;
+      var diff = (mean != null && selfShare != null) ? (selfShare - mean) * 100 : null;
+      var diffClr = (side === 'ex' && diff != null && diff > 0) ? 'var(--serious)' : 'var(--text-secondary)';
+      body.appendChild(h('div', { class: 'bench-row' }, [
+        h('div', { class: 'bench-head' }, [h('span', { class: 'bench-name', text: g.name }), h('span', { class: 'bench-n', text: 'n=' + n })]),
+        h('div', { class: 'bench-meter' }, [tickMeter(pctile, 'var(--kmu)'),
+          h('span', { class: 'meter-val', style: 'color:var(--kmu)', text: pctile == null ? '—' : F.percentileLabel(pctile) })]),
+        h('div', { class: 'bench-diff', style: 'color:' + diffClr, text: diff == null ? '집단 평균 대비 —' : ('집단 평균 대비 ' + (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%p') }),
+      ]));
     });
+    return h('div', { class: 'card' }, [
+      cardHead('compare', 'var(--series-6)', '3중 벤치마크', totWordOf(side) + ' 대비 구성비 백분위 · 중립 표기'),
+      body,
+    ]);
+  }
+
+  // E — 학생 1인당 (재학생수, 같은 규모 백분위) · enroll 결측 시 숨김
+  function perStudentCard(side, code, sid, yr, val) {
+    var enr = enrollOf(sid, yr);
+    if (enr == null || enr <= 0 || val == null) return null;
+    var per = val / enr; // 천원/명
+    var ids = schools.map(function (s, i) { return i; }).filter(function (i) { return schools[i].scale === schools[sid].scale; });
+    var vals = ids.map(function (id) { var v2 = gv(side, code, id, yr), e2 = enrollOf(id, yr); return (v2 != null && e2) ? v2 / e2 : null; })
+      .filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; });
+    var n = vals.length;
+    var pctile = (n > 1) ? vals.filter(function (x) { return x < per; }).length / (n - 1) : null;
+    return h('div', { class: 'card' }, [
+      cardHead('users', 'var(--series-5)', '학생 1인당', schools[sid].scale + ' 집단 · 재학생 ' + F.intComma(enr) + '명'),
+      h('div', { class: 'per-ban' }, [h('span', { class: 'per-val', text: F.krw(per) }), h('span', { class: 'per-unit', text: '/ 학생 1인' })]),
+      h('div', { class: 'meter-row' }, [h('span', { class: 'meter-lab', text: '같은 규모 백분위' }), tickMeter(pctile, 'var(--series-5)'),
+        h('span', { class: 'meter-val', style: 'color:var(--series-5)', text: pctile == null ? '—' : F.percentileLabel(pctile) })]),
+    ]);
+  }
+
+  // F — 성격 진단 (성장 기여도 · 변동성)
+  function diagCard(side, code, sid, yr, val) {
+    var body = h('div', { class: 'diag' });
+    var totCode = totCodeOf(side);
+    var prev = gv(side, code, sid, yr - 1);
+    var tot = gv(side, totCode, sid, yr), totp = gv(side, totCode, sid, yr - 1);
+    if (val != null && prev != null && tot != null && totp != null) {
+      var dTot = tot - totp;
+      if (Math.abs(dTot) >= 1) {
+        var contrib = (val - prev) / dTot * 100;
+        body.appendChild(h('div', { class: 'diag-item' }, [
+          h('div', { class: 'diag-lab', text: '성장 기여도 (' + (yr - 1) + '→' + yr + ')' }),
+          h('div', { class: 'diag-txt', html: '최근 1년 ' + totWordOf(side) + ' 증가분의 <b>' + contrib.toFixed(0) + '%</b>를 이 계정이 차지' }),
+        ]));
+      }
+    }
+    var rates = [];
+    for (var i = 1; i < YEARS.length; i++) { var a = gv(side, code, sid, YEARS[i - 1]), b = gv(side, code, sid, YEARS[i]); if (a != null && b != null && a !== 0) rates.push((b - a) / a); }
+    if (rates.length >= 3) {
+      var mean = rates.reduce(function (x, y) { return x + y; }, 0) / rates.length;
+      var variance = rates.reduce(function (x, y) { return x + (y - mean) * (y - mean); }, 0) / rates.length;
+      var sd = Math.sqrt(variance);
+      var cv = Math.abs(mean) > 1e-6 ? sd / Math.abs(mean) : (sd > 0.05 ? 1 : 0);
+      var band = cv < 0.15 ? 'rigid' : (cv > 0.4 ? 'volatile' : 'mid');
+      var lbl = { rigid: '경직성', mid: '보통', volatile: '변동성' }[band];
+      body.appendChild(h('div', { class: 'diag-item' }, [
+        h('div', { class: 'diag-lab', text: '변동성 (9개년 YoY 변동계수)' }),
+        h('div', {}, [h('span', { class: 'diag-badge ' + band, text: lbl + ' · CV ' + cv.toFixed(2) })]),
+      ]));
+    }
+    body.appendChild(h('div', { class: 'footnote', html: '<b>경직성</b> = 매년 일정하게 발생(CV&lt;0.15) · <b>변동성</b> CV&gt;0.4' }));
+    return h('div', { class: 'card' }, [cardHead('data', 'var(--series-8)', '성격 진단', '성장 기여도 · 변동성'), body]);
+  }
+
+  // G — 유사 대학 스니펫 (같은 규모+권역, 부족 시 규모만)
+  function simCard(side, code, sid, yr, selfShare) {
+    var totCode = totCodeOf(side);
+    function shr(id) { var vv = gv(side, code, id, yr), tt = gv(side, totCode, id, yr); return (vv != null && tt) ? vv / tt : null; }
+    var region = schools[sid].region, scale = schools[sid].scale;
+    var allIds = schools.map(function (s, i) { return i; });
+    var ids = allIds.filter(function (i) { return i !== sid && schools[i].scale === scale && schools[i].region === region && shr(i) != null; });
+    var groupLabel = '같은 규모+권역';
+    if (ids.length < 8) { ids = allIds.filter(function (i) { return i !== sid && schools[i].scale === scale && shr(i) != null; }); groupLabel = '같은 규모'; }
+    var arr = ids.map(function (i) { return { sid: i, share: shr(i) }; }).sort(function (a, b) { return b.share - a.share; });
+    var rank = (selfShare == null) ? arr.length : arr.filter(function (r) { return r.share > selfShare; }).length;
+    var body = h('table', { class: 'sim-table' });
+    var tb = h('tbody');
+    function row(r, posLabel, self) {
+      var isKmu = r.sid === KMU_ID;
+      return h('tr', { class: (self ? 'sim-self ' : '') + (isKmu ? 'kmu-row' : '') }, [
+        h('td', { class: 'sim-pos', text: posLabel }),
+        h('td', { class: 'sim-nm' }, [h('span', { text: schools[r.sid].n }), isKmu ? h('span', { class: 'kmu-star', text: ' ★' }) : null]),
+        h('td', { class: 'sim-share', text: r.share == null ? '—' : F.pct(r.share, 1) }),
+      ]);
+    }
+    arr.slice(0, 3).forEach(function (r, i) { tb.appendChild(row(r, (i + 1) + '위')); });
+    tb.appendChild(row({ sid: sid, share: selfShare }, (rank + 1) + '위 / ' + (arr.length + 1), true));
+    arr.slice(Math.max(3, arr.length - 3)).forEach(function (r) { tb.appendChild(row(r, (arr.indexOf(r) + 1) + '위')); });
+    body.appendChild(tb);
+    return h('div', { class: 'card' }, [
+      cardHead('overview', 'var(--series-3)', '유사 대학 스니펫', groupLabel + ' · 구성비 상·하위 (n=' + arr.length + ')'),
+      h('div', { class: 'tbl-wrap' }, [body]),
+    ]);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -2940,7 +3289,20 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
       var n = document.querySelectorAll('#view svg').length;
       check('탭 ' + t + ' SVG 렌더(' + n + ')', t === 'data' ? true : n > 0);
     });
-    S.tab = 'overview'; render();
+
+    // 4) 구조 탭 — 계정 선택 시 분석 패널 렌더 (래더에 운영지출 대비 표기)
+    S.tab = 'structure'; S.t2_school = KMU_ID; S.t2_year = Y_LAST; S.t2_sel = { side: 'ex', code: '4100' }; render();
+    var panel = document.getElementById('t2-panel');
+    check('구조 탭 계정 선택 시 분석 패널 렌더',
+      !!panel && panel.querySelectorAll('svg').length > 0 && panel.textContent.indexOf('운영지출 대비') >= 0);
+
+    // 5) 연도 칩 전환 동작 (활성 칩 = 선택 연도)
+    var altYear = YEARS[YEARS.length - 2];
+    S.t2_year = altYear; render();
+    var onChip = document.querySelector('.yearchip.on');
+    check('연도 칩 전환 동작', !!onChip && onChip.textContent.indexOf(String(altYear)) >= 0);
+
+    S.t2_year = Y_LAST; S.tab = 'overview'; render();
 
     var badge = document.getElementById('selftestBadge');
     badge.className = 'selftest-badge ' + (ok ? 'pass' : 'fail');
