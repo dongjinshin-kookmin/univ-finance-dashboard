@@ -10,6 +10,8 @@
       --out dashboard/dashboard_mock.html [--minify]
 """
 import argparse
+import base64
+import mimetypes
 import os
 import re
 
@@ -20,6 +22,22 @@ SRC = os.path.join(HERE, "src")
 def read(path):
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def inline_css_assets(css):
+    """CSS url(assets/…) 로컬 참조 → data URI 인라인. 외부/데이터/앵커 참조는 보존."""
+    def repl(m):
+        raw = m.group(1).strip().strip('\'"')
+        if raw.startswith("data:") or raw.startswith("#") or "://" in raw:
+            return m.group(0)
+        path = os.path.normpath(os.path.join(SRC, raw))
+        if not os.path.isfile(path):
+            return m.group(0)
+        mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        return 'url("data:' + mime + ";base64," + b64 + '")'
+    return re.sub(r"url\(\s*([^)]+?)\s*\)", repl, css)
 
 
 def escape_for_script(json_text):
@@ -55,6 +73,7 @@ def build(data_path, out_path, do_minify=False):
     def repl_link(m):
         href = m.group(1)
         css = read(os.path.join(SRC, href))
+        css = inline_css_assets(css)   # url(assets/…) → data URI (인라인 후 최소화)
         if do_minify:
             css = minify_css(css)
         return "<style>\n" + css + "\n</style>"
@@ -81,9 +100,11 @@ def build(data_path, out_path, do_minify=False):
         f.write(html)
     size = os.path.getsize(out_path)
     print("built", out_path, "({:.2f} MB)".format(size / 1024 / 1024))
-    # 자체완결성 점검
+    # 자체완결성 점검 (src/href 속성 + CSS url() 양쪽)
     leftover = re.findall(r'(?:src|href)=["\'](?!data:|#)([^"\']+)["\']', html)
     ext = [u for u in leftover if not u.startswith("data:")]
+    css_urls = re.findall(r'url\(\s*["\']?([^)"\']+?)["\']?\s*\)', html)
+    ext += [u for u in css_urls if not (u.startswith("data:") or u.startswith("#"))]
     if ext:
         print("  경고: 외부 참조 잔존:", ext)
     else:

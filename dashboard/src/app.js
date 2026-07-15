@@ -187,7 +187,7 @@
   var typesAll = uniq(schools.map(function (s) { return s.type; }));
 
   var S = {
-    tab: 'overview',
+    tab: 'home',
     cohort: 'all',
     regions: new Set(regionsAll),
     scales: new Set(scalesAll),
@@ -249,6 +249,7 @@
 
   // ── 아이콘 (인라인 SVG, currentColor) ───────────────────
   var IC = {
+    home:      '<path d="M3 11.5l9-7.5 9 7.5"/><path d="M5.5 10v9.5h5v-6h3v6h5V10"/>',
     overview:  '<path d="M4 4h7v7H4z"/><path d="M13 4h7v4h-7z"/><path d="M13 11h7v9h-7z"/><path d="M4 14h7v6H4z"/>',
     structure: '<path d="M3 5h18"/><path d="M6 5v14"/><path d="M6 10h9"/><path d="M6 15h6"/>',
     timeseries:'<path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/>',
@@ -350,6 +351,7 @@
   //  탭 네비
   // ═══════════════════════════════════════════════════════
   var TABS = [
+    { id: 'home', label: '홈', title: '홈', eyebrow: 'Home · 시작하기' },
     { id: 'overview', label: '개요', title: '개요', eyebrow: 'Overview · 국민대학교 핵심 진단' },
     { id: 'structure', label: '수지 구조', title: '수지 구조', eyebrow: 'Structure · 관·항·목 드릴다운' },
     { id: 'timeseries', label: '시계열', title: '시계열 추이', eyebrow: 'Time Series · KPI 시계열' },
@@ -375,12 +377,85 @@
   function render() {
     renderTabs();
     var t = TABS.filter(function (x) { return x.id === S.tab; })[0];
+    document.body.setAttribute('data-tab', S.tab);   // 홈에서 스테이지 대형 타이틀 숨김(CSS)
     var eb = document.getElementById('stageEyebrow'); if (eb) eb.textContent = t ? t.eyebrow : '';
     var st = document.getElementById('stageTitle'); if (st) st.textContent = t ? t.title : '';
     var cr = document.getElementById('crumbTab'); if (cr) cr.textContent = t ? t.title : '';
     var v = document.getElementById('view');
     v.innerHTML = '';
-    ({ overview: renderOverview, structure: renderStructure, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, data: renderData })[S.tab](v);
+    ({ home: renderHome, overview: renderOverview, structure: renderStructure, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, data: renderData })[S.tab](v);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  탭 0 — 홈 (랜딩)
+  // ═══════════════════════════════════════════════════════
+  // 메뉴 카드: 사이드바 아이콘 + 메뉴명 + 한 줄 설명 + 이동. 아이콘 틴트색만 장식.
+  var HOME_CARDS = [
+    { id: 'overview',   c: 'var(--kmu)',      desc: '국민대 핵심 지표 6종과 코호트 대비 위치를 한눈에' },
+    { id: 'structure',  c: 'var(--series-3)', desc: '관→항→목 드릴다운과 선택 계정 심층 분석' },
+    { id: 'timeseries', c: 'var(--series-2)', desc: 'KPI 10종의 9개년 추이를 코호트 밴드와 비교' },
+    { id: 'compare',    c: 'var(--series-4)', desc: '최대 8개 대학 나란히 비교하고 랭킹 확인' },
+    { id: 'crisis',     c: 'var(--series-7)', desc: '충원율×등록금의존율 매트릭스와 구조 리스크 지수' },
+    { id: 'outlook',    c: 'var(--series-6)', desc: '학령인구 절벽과 권역별 수요-공급 전망' },
+    { id: 'data',       c: 'var(--series-1)', desc: '원데이터 탐색, 항등식 검증, CSV 다운로드' },
+  ];
+  function goTab(id) { S.tab = id; closeDrawer(); window.scrollTo(0, 0); render(); }
+
+  function renderHome(v) {
+    var wrap = h('div', { class: 'home' });
+
+    // ── 히어로 (가공 사진 + 네이비 그라데이션 오버레이) ──
+    var stats = h('div', { class: 'hero-stats' });
+    [
+      { name: '등록금의존율_총계', label: '등록금의존율' },
+      { name: '운영수지율', label: '운영수지율' },
+      { name: '교육비환원율', label: '교육비환원율' },
+    ].forEach(function (s) {
+      var meta = KPI_META[s.name];
+      var r = latestOf(function (sid, y) { return kv(s.name, sid, y); }, KMU_ID);
+      stats.appendChild(h('div', { class: 'hero-stat' }, [
+        h('div', { class: 'hs-val', text: r ? F.byFmt(r.v, meta.fmt) : '—' }),
+        h('div', { class: 'hs-lab', text: s.label + (r ? ' · ' + r.year : '') }),
+      ]));
+    });
+
+    var hero = h('div', { class: 'home-hero' }, [
+      h('div', { class: 'home-hero-scrim' }),
+      h('div', { class: 'home-hero-inner' }, [
+        h('div', { class: 'hero-eyebrow' }, [
+          h('span', { class: 'brand-mark sq', text: 'KMU' }),
+          h('span', { text: '국민대학교 · 개교 80주년 캠퍼스' }),
+        ]),
+        h('h1', { class: 'hero-title', text: '사립대학 교비회계 수지분석' }),
+        h('p', { class: 'hero-sub', text:
+          Y_FIRST + '~' + Y_LAST + ' · ' + schools.length + '개교 · 사학기관 재무·회계 특례규칙 기준' }),
+        stats,
+      ]),
+    ]);
+    wrap.appendChild(hero);
+
+    // ── 메뉴 안내 카드 그리드 ──
+    wrap.appendChild(h('div', { class: 'home-menu-head' }, [
+      h('span', { class: 'hm-eyebrow', text: '메뉴' }),
+      h('span', { class: 'hm-desc', text: '분석 화면을 선택하세요 — 카드를 누르면 해당 탭으로 이동합니다' }),
+    ]));
+    var menu = h('div', { class: 'home-menu' });
+    HOME_CARDS.forEach(function (card) {
+      var t = TABS.filter(function (x) { return x.id === card.id; })[0];
+      if (!t) return;
+      menu.appendChild(h('button', {
+        class: 'home-card', type: 'button', onClick: function () { goTab(card.id); },
+      }, [
+        iconTile('hc-ico', t.id, card.c),
+        h('div', { class: 'hc-txt' }, [
+          h('div', { class: 'hc-name', text: t.label }),
+          h('div', { class: 'hc-desc', text: card.desc }),
+        ]),
+        h('span', { class: 'hc-arrow', text: '→' }),
+      ]));
+    });
+    wrap.appendChild(menu);
+    v.appendChild(wrap);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1764,6 +1839,16 @@
     S.t2_year = altYear; render();
     var onChip = document.querySelector('.yearchip.on');
     check('연도 칩 전환 동작', !!onChip && onChip.textContent.indexOf(String(altYear)) >= 0);
+
+    // 6) 홈 랜딩 — 히어로 + 메뉴 카드 7개 + 카드 클릭 시 해당 탭 이동
+    S.tab = 'home'; render();
+    var heroOk = !!document.querySelector('#view .home-hero');
+    var homeCards = document.querySelectorAll('#view .home-card');
+    var firstCard = homeCards[0];
+    if (firstCard) firstCard.click();               // 첫 카드(개요) → overview 탭 전환
+    check('홈 랜딩 렌더 + 메뉴 카드 내비게이션',
+      heroOk && homeCards.length === 7 && !!firstCard && S.tab === 'overview' &&
+      document.querySelectorAll('#view svg').length > 0);
 
     S.t2_year = Y_LAST; S.tab = 'overview'; render();
 

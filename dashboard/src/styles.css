@@ -388,6 +388,110 @@ body.collapsed .collapse-btn { align-self: center; margin: 2px auto 0; }
 .card.span2 { grid-column: span 2; }
 @media (max-width: 900px) { .card.span2 { grid-column: span 1; } }
 
+/* ══ 홈 랜딩 ══════════════════════════════════════════════ */
+/* 홈에서는 스테이지 대형 타이틀을 숨기고 히어로가 그 역할을 대신한다(크롬은 유지). */
+body[data-tab="home"] .stage-top { display: none; }
+
+.home { display: flex; flex-direction: column; gap: clamp(20px, 2.4vw, 34px); }
+
+/* 히어로 — 가공 사진 배경 + KMU 네이비 그라데이션 오버레이 */
+.home-hero {
+  position: relative; isolation: isolate; overflow: hidden;
+  border-radius: var(--radius-lg);
+  min-height: clamp(300px, 42vw, 460px);
+  display: flex; align-items: flex-end;
+  background-image: url(assets/hero.jpg);
+  background-size: cover; background-position: center 38%;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+/* 오버레이: 좌하단 네이비 사선 틴트 + 하단 암부(텍스트 가독성). 라이트 기본. */
+.home-hero-scrim {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(0deg, rgba(0,26,58,0.78) 0%, rgba(0,33,72,0.30) 46%, rgba(0,45,96,0.06) 100%),
+    linear-gradient(102deg, rgba(0,44,92,0.72) 0%, rgba(0,60,120,0.34) 40%, rgba(0,79,159,0.05) 82%);
+}
+/* 다크: 사진을 더 눌러 대시보드 톤과 조화 + 대비 확보 */
+:root[data-theme="dark"] .home-hero-scrim,
+:root:not([data-theme="light"]) .home-hero-scrim {
+  background:
+    linear-gradient(0deg, rgba(0,14,32,0.90) 0%, rgba(0,20,46,0.55) 46%, rgba(0,28,60,0.28) 100%),
+    linear-gradient(102deg, rgba(0,22,50,0.86) 0%, rgba(0,34,72,0.52) 42%, rgba(0,48,100,0.20) 88%);
+}
+:root[data-theme="dark"] .home-hero,
+:root:not([data-theme="light"]) .home-hero { border-color: var(--border-strong); }
+
+.home-hero-inner {
+  position: relative; z-index: 2;
+  padding: clamp(22px, 3.4vw, 46px);
+  max-width: 760px; color: #fff;
+}
+.hero-eyebrow {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.74rem; font-weight: 720; letter-spacing: 0.02em;
+  color: rgba(255,255,255,0.92); margin-bottom: 16px;
+}
+.hero-eyebrow .brand-mark {
+  width: 34px; height: 34px; font-size: 12px; font-weight: 800; letter-spacing: 0.02em;
+  color: #fff; background: linear-gradient(145deg, var(--kmu) 0%, var(--kmu-strong) 100%);
+  border: 1px solid rgba(255,255,255,0.25);
+}
+.hero-title {
+  margin: 0; font-weight: 800; letter-spacing: -0.03em; line-height: 1.03;
+  font-size: clamp(1.9rem, 4.4vw, 3.35rem);
+  text-shadow: 0 2px 20px rgba(0,18,44,0.5);
+}
+.hero-sub {
+  margin: 14px 0 0; font-size: clamp(0.86rem, 1.1vw, 1.02rem);
+  font-weight: 550; color: rgba(255,255,255,0.9); line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+}
+.hero-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: clamp(18px, 2vw, 26px); }
+.hero-stat {
+  padding: 10px 16px; border-radius: var(--radius-sm);
+  background: rgba(3,24,52,0.42); border: 1px solid rgba(255,255,255,0.2);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.hero-stat .hs-val { font-size: 1.28rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.hero-stat .hs-lab { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.02em; color: rgba(255,255,255,0.82); margin-top: 3px; }
+
+/* 메뉴 카드 그리드 */
+.home-menu-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 0 2px; }
+.home-menu-head .hm-eyebrow { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 750; color: var(--kmu); }
+.home-menu-head .hm-desc { font-size: 0.84rem; color: var(--muted); }
+
+.home-menu {
+  display: grid; gap: clamp(12px, 1.2vw, 16px);
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 1240px) { .home-menu { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 860px)  { .home-menu { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .home-menu { grid-template-columns: 1fr; } }
+
+.home-card {
+  display: flex; align-items: flex-start; gap: 13px; text-align: left;
+  padding: clamp(15px, 1.3vw, 19px);
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); cursor: pointer; font-family: inherit;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+}
+.home-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--border-strong); }
+.home-card:focus-visible { outline: none; border-color: var(--kmu); box-shadow: 0 0 0 3px var(--kmu-soft-2); }
+.home-card .hc-ico { width: 40px; height: 40px; border-radius: var(--radius-xs); }
+.home-card .hc-ico svg { width: 20px; height: 20px; }
+.home-card .hc-txt { flex: 1; min-width: 0; }
+.home-card .hc-name { font-size: 1rem; font-weight: 740; letter-spacing: -0.01em; color: var(--text-primary); }
+.home-card .hc-desc { margin-top: 5px; font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary); }
+.home-card .hc-arrow { color: var(--muted); font-size: 1rem; flex-shrink: 0; transition: transform .14s ease, color .14s ease; }
+.home-card:hover .hc-arrow { color: var(--kmu); transform: translateX(3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-card, .home-card .hc-arrow { transition: none; }
+  .home-card:hover { transform: none; }
+  .home-card:hover .hc-arrow { transform: none; }
+}
+
 /* 카드 헤더 (스쿼클 아이콘 + 제목/부제) */
 .card-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
 .card-head .ch-ico { width: 38px; height: 38px; border-radius: var(--radius-xs); }
