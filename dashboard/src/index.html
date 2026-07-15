@@ -17,18 +17,34 @@
 
 <div class="scrim" id="scrim"></div>
 
-<!-- 좌측 사이드바: 브랜드 · 대형 내비 · 필터 · 푸터 -->
+<!-- 좌측 사이드바: 브랜드 · 워크스페이스 · 검색 · 내비 · 필터 · 유저 -->
 <aside class="sidebar" id="sidebar">
   <div class="brand">
-    <span class="brand-mark">KMU</span>
-    <span class="brand-text">
-      <span class="bt-1">국민대학교</span>
-      <span class="bt-2">교비회계 수지분석</span>
-    </span>
+    <span class="brand-mark sq">KMU</span>
+    <span class="brand-word">교비 수지분석</span>
   </div>
-  <button class="collapse-btn" id="collapseBtn" title="사이드바 접기/펼치기" aria-label="사이드바 접기">«</button>
 
+  <div class="workspace-card">
+    <span class="ws-ava sq">국</span>
+    <span class="ws-txt">
+      <span class="ws-1">Workspace</span>
+      <span class="ws-2">국민대학교</span>
+    </span>
+    <span class="ws-chev">⌄</span>
+  </div>
+
+  <div class="sidebar-search">
+    <div class="ss-input-wrap">
+      <span class="ss-mag" aria-hidden="true">⌕</span>
+      <input id="globalSearch" type="text" placeholder="대학 검색…" autocomplete="off" aria-label="대학 검색">
+      <span class="ss-kbd">비교</span>
+    </div>
+  </div>
+
+  <div class="section-label">메인 메뉴</div>
   <nav class="mainnav" id="tabs"></nav>
+
+  <button class="collapse-btn" id="collapseBtn" title="사이드바 접기/펼치기" aria-label="사이드바 접기">«</button>
 
   <div class="filters-wrap">
     <div class="filters-head">
@@ -39,15 +55,41 @@
   </div>
 
   <div class="sidebar-footer">
-    <button class="icon-btn" id="themeToggle" title="테마 전환">◐ 테마</button>
-    <span class="selftest-badge" id="selftestBadge"></span>
-    <span class="lite-badge" id="liteBadge">LITE · 목(目) 계정 생략</span>
-    <span class="sub" id="metaSub"></span>
+    <div class="user-card">
+      <span class="uc-ava">R</span>
+      <span class="uc-txt">
+        <span class="uc-1">재정분석 리뷰어</span>
+        <span class="uc-2">교비회계 수지분석 v3</span>
+      </span>
+    </div>
+    <div class="footer-meta">
+      <span class="selftest-badge" id="selftestBadge"></span>
+      <span class="lite-badge" id="liteBadge">LITE · 목(目) 계정 생략</span>
+      <span class="sub" id="metaSub"></span>
+    </div>
   </div>
 </aside>
 
 <!-- 메인 스테이지 -->
 <main class="stage">
+  <header class="topbar-desktop">
+    <nav class="crumb" aria-label="위치">
+      <span class="cr-nav" aria-hidden="true">‹</span>
+      <span class="cr-nav" aria-hidden="true">›</span>
+      국민대학교 <span class="cr-sep">·</span> 교비회계 <span class="cr-sep">›</span> <b id="crumbTab"></b>
+    </nav>
+    <div class="stage-actions">
+      <button class="action-btn" id="csvBtnTop" title="현재 필터 CSV 다운로드">
+        <span class="ab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        CSV
+      </button>
+      <button class="action-btn" id="themeToggle" title="테마 전환">
+        <span class="ab-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 0 18 9 9 0 0 1 0-18z"/></svg></span>
+        테마
+      </button>
+    </div>
+  </header>
+
   <div class="stage-top">
     <div class="stage-eyebrow" id="stageEyebrow"></div>
     <h1 class="stage-title" id="stageTitle"></h1>

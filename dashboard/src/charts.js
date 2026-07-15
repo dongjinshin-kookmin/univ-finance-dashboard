@@ -490,8 +490,59 @@
     register(container, draw);
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  MINI BARS (KPI 카드용 라운드 바 미니차트, 축 없음)
+  //  spec: { points:[[x,y]], color, height, fmt(fn), xFmt(fn) }
+  //  0(또는 데이터 최소) 기준선에 정착한 4px 라운드탑 세로 바, 2px 간격.
+  //  마지막(최신) 바만 풀컬러, 이전은 옅게 → 현재값에 시선 유도.
+  // ═══════════════════════════════════════════════════════
+  function miniBars(container, spec) {
+    function draw() {
+      var H = spec.height || 46;
+      var b = baseSvg(container, H), svg = b.svg, W = b.w;
+      var pad = 2, topPad = 4;
+      var pts = (spec.points || []).filter(function (p) { return p[1] != null; });
+      if (!pts.length) return;
+      var ys = pts.map(function (p) { return p[1]; });
+      var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
+      var base = Math.min(0, ymin);
+      var top = Math.max(0, ymax);
+      if (base === top) top = base + 1;
+      var y = linScale(base, top, H - 1, topPad);
+      var n = pts.length;
+      var slot = (W - pad * (n - 1)) / n;
+      var bw = Math.max(3, Math.min(slot, 18));
+      var y0 = y(base);
+      pts.forEach(function (p, i) {
+        var cx = i * (slot + pad) + slot / 2;
+        var vy = y(p[1]);
+        var h1 = Math.abs(vy - y0);
+        var ry = h1 < 4 ? h1 / 2 : 4;
+        var isLast = i === n - 1;
+        var barTop = Math.min(vy, y0);
+        var rect = el('rect', {
+          x: (cx - bw / 2).toFixed(1), y: barTop.toFixed(1),
+          width: bw.toFixed(1), height: Math.max(1, h1).toFixed(1), rx: ry, ry: ry
+        }, { fill: spec.color || 'var(--series-1)', opacity: isLast ? '1' : '0.32' });
+        svg.appendChild(rect);
+        (function (pt) {
+          rect.addEventListener('mousemove', function (ev) {
+            showTip('<div class="tip-row"><span class="tip-key tip-muted">' + (spec.xFmt ? spec.xFmt(pt[0]) : pt[0]) + '</span><b>' + (spec.fmt ? spec.fmt(pt[1]) : pt[1]) + '</b></div>', ev);
+          });
+          rect.addEventListener('mouseleave', hideTip);
+        })(p);
+      });
+      // 0 기준선 (음수 있을 때만)
+      if (base < 0) {
+        svg.appendChild(el('line', { x1: 0, y1: y0.toFixed(1), x2: W, y2: y0.toFixed(1) },
+          { stroke: 'var(--axis)', strokeWidth: '1', opacity: '0.6' }));
+      }
+    }
+    register(container, draw);
+  }
+
   global.CHARTS = {
-    line: line, bar: bar, scatter: scatter, histogram: histogram, sparkline: sparkline,
+    line: line, bar: bar, scatter: scatter, histogram: histogram, sparkline: sparkline, miniBars: miniBars,
     redrawAll: redrawAll, resolveColor: resolveColor, niceTicks: niceTicks
   };
 })(typeof window !== 'undefined' ? window : globalThis);
