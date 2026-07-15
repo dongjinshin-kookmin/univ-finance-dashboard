@@ -169,6 +169,16 @@
         svg.appendChild(axisText(x(v), m.t + ih + 20, v, 'middle'));
       });
 
+      // 추계(전망) 구간 음영 + 라벨
+      if (spec.projFrom != null && spec.projFrom < xmax) {
+        var pf = Math.max(spec.projFrom, xmin);
+        svg.appendChild(el('rect', { x: x(pf), y: m.t, width: Math.max(1, x(xmax) - x(pf)), height: ih },
+          { fill: 'var(--event-shade)' }));
+        var pt = el('text', { x: (x(pf) + x(xmax)) / 2, y: m.t + 12, 'text-anchor': 'middle' });
+        pt.setAttribute('class', 'viz-event-label'); pt.textContent = spec.projLabel || '추계 구간';
+        svg.appendChild(pt);
+      }
+
       // 밴드 (p25~p75)
       if (spec.band) {
         var lo = spec.band.lo, hi = spec.band.hi;
@@ -195,9 +205,20 @@
         var d = pathD(s.points, x, y);
         if (!d) return;
         var lw = s.width || (s.emphasize ? 3 : 2);
+        if (spec.projFrom != null) {
+          // 실적(실선)/추계(점선) 분리 렌더 — 경계점 공유해 연속성 유지
+          var solid = s.points.filter(function (p) { return p[0] <= spec.projFrom; });
+          var proj = s.points.filter(function (p) { return p[0] >= spec.projFrom; });
+          var ds = pathD(solid, x, y), dp = pathD(proj, x, y);
+          if (ds) svg.appendChild(el('path', { d: ds, fill: 'none' },
+            { stroke: s.color, strokeWidth: String(lw), strokeLinejoin: 'round', strokeLinecap: 'round', opacity: s.dim ? '0.5' : '1' }));
+          if (dp) svg.appendChild(el('path', { d: dp, fill: 'none' },
+            { stroke: s.color, strokeWidth: String(lw), strokeLinejoin: 'round', strokeLinecap: 'round', strokeDasharray: '5 4', opacity: s.dim ? '0.5' : '0.9' }));
+        } else {
         svg.appendChild(el('path', { d: d, fill: 'none' },
           { stroke: s.color, strokeWidth: String(lw), strokeLinejoin: 'round', strokeLinecap: 'round',
             strokeDasharray: s.dashed ? '5 4' : '', opacity: s.dim ? '0.5' : '1' }));
+        }
         // 끝점 마커 + surface ring (강조 시리즈)
         var last = s.points.filter(function (p) { return p[1] != null; }).pop();
         if (last && s.emphasize) {
@@ -374,6 +395,31 @@
       if (spec.yLabel) {
         var yl = el('text', { x: 14, y: m.t + ih / 2, 'text-anchor': 'middle', transform: 'rotate(-90 14 ' + (m.t + ih / 2) + ')' });
         yl.setAttribute('class', 'viz-tick viz-axislabel'); yl.textContent = spec.yLabel; svg.appendChild(yl);
+      }
+
+      // 사분면 가이드라인 + 라벨 (리스크 매트릭스)
+      if (spec.guides) {
+        var g = spec.guides;
+        if (g.x != null && g.x >= xmin && g.x <= xmax) {
+          svg.appendChild(el('line', { x1: x(g.x), y1: m.t, x2: x(g.x), y2: m.t + ih },
+            { stroke: 'var(--axis)', strokeWidth: '1.5', strokeDasharray: '5 4' }));
+        }
+        if (g.y != null && g.y >= ymin && g.y <= ymax) {
+          svg.appendChild(el('line', { x1: m.l, y1: y(g.y), x2: m.l + iw, y2: y(g.y) },
+            { stroke: 'var(--axis)', strokeWidth: '1.5', strokeDasharray: '5 4' }));
+        }
+        var pad = 8;
+        var corners = {
+          tl: { x: m.l + pad, y: m.t + 14, a: 'start' },
+          tr: { x: m.l + iw - pad, y: m.t + 14, a: 'end' },
+          bl: { x: m.l + pad, y: m.t + ih - pad, a: 'start' },
+          br: { x: m.l + iw - pad, y: m.t + ih - pad, a: 'end' }
+        };
+        (g.labels || []).forEach(function (lab) {
+          var c = corners[lab.corner] || corners.tl;
+          var t = el('text', { x: c.x, y: c.y, 'text-anchor': c.a });
+          t.setAttribute('class', 'viz-quad-label'); t.textContent = lab.text; svg.appendChild(t);
+        });
       }
 
       // 강조점 맨 위

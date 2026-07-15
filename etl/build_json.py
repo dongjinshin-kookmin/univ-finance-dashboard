@@ -21,6 +21,7 @@ import json
 from datetime import datetime, timezone
 
 import config
+import ext_data
 import metrics
 
 # 희소 인코딩 임계(비결측률)
@@ -333,6 +334,28 @@ def _assert_full_lite_consistency(full, lite):
                     f"full/lite 불일치 {side}.{code}[{i}]"
 
 
+def _assert_ext_integrity(doc):
+    """ext 무결성 — 실패 시 AssertionError."""
+    nrows = len(doc["rows"])
+    nschools = len(doc["schools"])
+    ext = doc["ext"]
+    for name, arr in ext["series"].items():
+        assert len(arr) == nrows, f"ext.series.{name} 길이 {len(arr)}≠{nrows}"
+    for name, arr in ext["kpi2"].items():
+        assert len(arr) == nrows, f"ext.kpi2.{name} 길이 {len(arr)}≠{nrows}"
+    assert len(ext["schools_extra"]) == nschools, \
+        f"ext.schools_extra 길이 {len(ext['schools_extra'])}≠{nschools}"
+    pop = ext["population"]
+    ns, ny = len(pop["sidos"]), len(pop["years"])
+    for key in ("age18_21", "age6_21"):
+        assert len(pop[key]) == ns, f"ext.population.{key} 시도수 불일치"
+        assert all(len(r) == ny for r in pop[key]), f"ext.population.{key} 연도수 불일치"
+    assert len(ext["region_outlook"]) == ns, "region_outlook 시도수 불일치"
+    ct = ext["closure_traj"]
+    for key in ("충원율", "운영수지율", "등록금의존율"):
+        assert len(ct[key]) == len(ct["offsets"]), f"closure_traj.{key} 길이 불일치"
+
+
 def _write(doc, path):
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, separators=(",", ":"))
@@ -358,6 +381,7 @@ def run():
     kpi = _build_kpi(lookup, key_rows, compiled)
     agg = _build_agg(kpi, pub_rows, schools, compiled)
     validation = _build_validation(school_rows)
+    ext = ext_data.build_ext(school_rows, key_rows, pub_rows, lookup, kpi)
 
     generated = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -377,6 +401,7 @@ def run():
             "kpi": kpi,
             "agg": agg,
             "validation": validation,
+            "ext": ext,
         }
 
     full = make(False)
@@ -385,6 +410,9 @@ def run():
     _assert_integrity(full, accounts)
     _assert_integrity(lite, accounts)
     _assert_full_lite_consistency(full, lite)
+    _assert_ext_integrity(full)
+    _assert_ext_integrity(lite)
+    assert full["ext"] == lite["ext"], "full/lite ext 불일치"
 
     full_path = config.BUILD_DIR / "dashboard_data.json"
     lite_path = config.BUILD_DIR / "dashboard_data_lite.json"
@@ -397,6 +425,13 @@ def run():
     with open(lite_path, encoding="utf-8") as fh:
         json.load(fh)
 
+    def _cov(arr):
+        n = len(arr)
+        return round(sum(1 for x in arr if x is not None) / n, 4) if n else 0.0
+
+    ext_cov = {name: _cov(arr) for name, arr in ext["series"].items()}
+    ext_cov.update({name: _cov(arr) for name, arr in ext["kpi2"].items()})
+
     return {
         "full_size": full_size,
         "lite_size": lite_size,
@@ -406,6 +441,8 @@ def run():
         "missing_keys": missing,
         "full_path": full_path,
         "lite_path": lite_path,
+        "ext_cov": ext_cov,
+        "closure_n": ext["closure_traj"]["n"],
     }
 
 

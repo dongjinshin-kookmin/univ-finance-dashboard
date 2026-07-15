@@ -598,6 +598,67 @@ select.sel:focus, input.txt:focus { outline: none; border-color: var(--kmu); box
   body.drawer-open .scrim { display: block; opacity: 1; }
 }
 
+/* ══ v4: 위기 진단 · 구조 전망 ═════════════════════════════ */
+/* 사분면 가이드 라벨 */
+.viz-quad-label { fill: var(--muted); font-size: 11px; font-weight: 700; opacity: 0.8; }
+
+/* 연속 색 범례 (위기스코어 그라데이션) */
+.risk-legend { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary); }
+.risk-legend .rl-grad { display: flex; align-items: center; gap: 8px; }
+.risk-legend .rl-bar { width: 148px; height: 11px; border-radius: 999px; border: 1px solid var(--border-strong); }
+.risk-legend .rl-cap { color: var(--muted); font-size: 0.72rem; font-weight: 650; }
+.risk-legend .rl-size { display: inline-flex; align-items: center; gap: 7px; }
+.risk-legend .rl-size i { border-radius: 50%; background: var(--muted); opacity: 0.5; display: inline-block; }
+
+/* 구조 리스크 지수 테이블 — 5요소 분해 셀 */
+table.risk-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+table.risk-table th, table.risk-table td { padding: 9px 10px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+table.risk-table th {
+  color: var(--muted); font-weight: 720; font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border-strong); position: sticky; top: 0; background: var(--surface-1);
+}
+table.risk-table td:first-child, table.risk-table th:first-child,
+table.risk-table td.tal, table.risk-table th.tal { text-align: left; }
+table.risk-table tr:hover td { background: var(--surface-2); }
+table.risk-table tr.kmu-row td { background: var(--kmu-soft-2); font-weight: 660; }
+table.risk-table tr.kmu-row:hover td { background: var(--kmu-soft-2); }
+table.risk-table tr.closed-row td { color: var(--muted); }
+table.risk-table tr.closed-row .rt-name { color: var(--text-secondary); }
+table.risk-table .rt-rank { color: var(--muted); font-variant-numeric: tabular-nums; }
+table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--text-primary); }
+.closed-badge { font-size: 0.62rem; font-weight: 750; padding: 2px 7px; border-radius: 999px; background: var(--surface-3); color: var(--muted); border: 1px solid var(--border-strong); }
+/* 요소 백분위 셀: 미니 바 + 값 */
+.factor-cell { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; min-width: 52px; }
+.factor-cell .fc-track { width: 46px; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.factor-cell .fc-fill { height: 100%; border-radius: 999px; }
+.factor-cell .fc-val { font-size: 0.66rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 종합 스코어 필 배지 */
+.score-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 720; padding: 3px 11px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.score-pill i { width: 7px; height: 7px; border-radius: 50%; }
+.score-pill.hi { background: var(--bad-soft); color: var(--critical); }
+.score-pill.mid { background: var(--warn-soft); color: var(--serious); }
+.score-pill.lo { background: var(--good-soft); color: var(--good); }
+.footnote { font-size: 0.74rem; color: var(--muted); line-height: 1.55; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-strong); }
+.footnote b { color: var(--text-secondary); font-weight: 700; }
+
+/* 권역 전망 가로 바 (HTML) */
+.region-bars { display: flex; flex-direction: column; gap: 4px; }
+.rb-row { display: grid; grid-template-columns: 58px 1fr 128px; align-items: center; gap: 12px; padding: 7px 8px; border-radius: var(--radius-xs); }
+.rb-row:hover { background: var(--surface-2); }
+.rb-row.kmu { background: var(--kmu-soft); box-shadow: inset 3px 0 0 var(--kmu); }
+.rb-label { font-weight: 700; font-size: 0.85rem; color: var(--text-primary); }
+.rb-label .rb-region { display: block; font-size: 0.64rem; color: var(--muted); font-weight: 600; }
+.rb-track { position: relative; height: 22px; background: var(--surface-2); border-radius: var(--radius-xs); overflow: hidden; }
+.rb-fill { position: absolute; right: 0; top: 0; bottom: 0; border-radius: var(--radius-xs); display: flex; align-items: center; }
+.rb-pct { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font-size: 0.76rem; font-weight: 750; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+.rb-meta { font-size: 0.72rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; line-height: 1.4; }
+.rb-meta b { color: var(--text-secondary); font-weight: 700; }
+@media (max-width: 640px) { .rb-row { grid-template-columns: 48px 1fr; } .rb-meta { grid-column: 2; text-align: left; } }
+
+/* 국민대 포지션 카드 배너 스택 */
+.pos-banners { display: flex; flex-direction: column; gap: 10px; }
+.pos-banners .insight { font-size: 0.83rem; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

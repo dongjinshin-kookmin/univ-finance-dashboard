@@ -59,6 +59,9 @@ def main():
           f" / rows {js['n_rows']} / 미조인 {js['unmatched']}교")
     if js["missing_keys"]:
         print(f"    ⚠ 0 처리된 산식 키: {js['missing_keys']}")
+    cov = " ".join(f"{k}={v*100:.1f}%" for k, v in js["ext_cov"].items())
+    print(f"    ext 커버리지: {cov}")
+    print(f"    ext closure_traj 표본: {js['closure_n']}교")
 
     print("\n산출물:")
     for p in ("accounts.json", "schools.csv", "tidy.csv.gz",
