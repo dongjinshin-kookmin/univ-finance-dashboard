@@ -572,25 +572,32 @@ body[data-tab="home"] .stage-top { display: none; }
 .breadcrumb { font-size: 0.82rem; color: var(--muted); margin-bottom: 14px; }
 .breadcrumb b { color: var(--text-primary); font-weight: 680; }
 .tnode {
-  display: grid; grid-template-columns: 1fr 116px 88px 70px 66px; align-items: center;
-  gap: 12px; padding: 8px 10px; border-radius: var(--radius-xs); cursor: default; font-size: 0.87rem;
+  display: grid; grid-template-columns: minmax(150px, 1fr) 62px 104px 54px 56px; align-items: center;
+  gap: 10px; padding: 9px 10px; border-radius: var(--radius-xs); cursor: default; font-size: 0.95rem;
   transition: background .1s;
 }
 .tnode:hover { background: var(--surface-2); }
 .tnode.clickable { cursor: pointer; }
 .tnode .tname { display: flex; align-items: center; gap: 8px; overflow: hidden; }
 .tnode .tname .caret { width: 12px; color: var(--muted); flex-shrink: 0; font-size: 10px; }
-.tnode .tname .tsq { width: 15px; height: 15px; border-radius: 4px; flex-shrink: 0; }
+/* 관항목 숫자 코드 배지 (컬러 스쿼클) */
+.tnode .tname .tcode {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; height: 22px; padding: 0 6px; border-radius: 7px; border: 1px solid transparent;
+  font-size: 0.78rem; font-weight: 760; letter-spacing: 0.02em; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+}
+.tnode .tname .tcode.lv1 { font-weight: 800; }
 .tnode .tname .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tnode .tbar-wrap { position: relative; height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
-.tnode .tbar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--series-1); }
-.tnode .tval { text-align: right; font-variant-numeric: tabular-nums; font-weight: 680; }
+.tnode .tbar-wrap { position: relative; height: 9px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+.tnode .tbar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--series-1); }
+.tnode .tval { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
 .tnode .tshare { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
-.tnode .tyoy { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.81rem; font-weight: 650; }
+.tnode .tyoy { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.85rem; font-weight: 650; }
 .tyoy.up { color: var(--delta-up); } .tyoy.down { color: var(--delta-down); }
-.tnode.lv1 { font-weight: 720; font-size: 0.92rem; }
+.tnode.lv1 { font-weight: 740; font-size: 1.04rem; }
 .tnode.selected { background: var(--kmu-soft); box-shadow: inset 3px 0 0 var(--kmu); }
-.indent-1 { padding-left: 20px; } .indent-2 { padding-left: 42px; }
+.indent-1 { padding-left: 22px; } .indent-2 { padding-left: 46px; }
 
 /* ══ 테이블 ═══════════════════════════════════════════════ */
 .tbl-wrap { overflow-x: auto; }
@@ -768,15 +775,28 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
 .yearchips .yearchip { font-variant-numeric: tabular-nums; font-weight: 650; }
 .chip.disabled { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
 
-.t2-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(348px, 400px); gap: clamp(16px, 1.6vw, 22px); align-items: start; }
+/* 트리 카드는 목(目) 계정명 길이에 맞춰 타이트하게, 분석 패널은 넓게 */
+.t2-grid { display: grid; grid-template-columns: minmax(500px, 600px) minmax(0, 1fr); gap: clamp(16px, 1.6vw, 22px); align-items: start; }
 .t2-trees { display: flex; flex-direction: column; gap: clamp(16px, 1.6vw, 22px); min-width: 0; }
-.t2-panel { position: sticky; top: 18px; display: flex; flex-direction: column; gap: 14px; }
+.t2-treecard { padding: 18px 18px 12px; }
+.t2-panel { position: sticky; top: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .t2-panel .card { padding: 16px 18px; }
 .t2-panel .card-head { margin-bottom: 12px; }
 @media (max-width: 1080px) {
   .t2-grid { grid-template-columns: 1fr; }
   .t2-panel { position: static; }
 }
+
+/* 계층 카드 헤더: 총액 강조 + 확대된 제목 */
+.t2-treehead { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 14px; }
+.t2-treehead .th-ico { width: 44px; height: 44px; border-radius: var(--radius-sm); flex-shrink: 0; }
+.t2-treehead .th-ico svg { width: 22px; height: 22px; }
+.t2-treehead .th-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.th-title { font-size: var(--t-xl); font-weight: 780; letter-spacing: -0.02em; line-height: 1.05; color: var(--text-primary); }
+.th-totlabel { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; color: var(--muted); text-transform: uppercase; margin-top: 3px; }
+.th-totrow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.th-total { font-size: clamp(1.8rem, 2.5vw, 2.25rem); font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.th-sub { font-size: 0.76rem; color: var(--text-secondary); font-weight: 550; margin-top: 2px; }
 
 /* A 헤드라인 */
 .apanel-head { display: flex; flex-direction: column; gap: 8px; }
@@ -795,9 +815,13 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
 .lad-row { display: grid; grid-template-columns: 1fr 78px 52px; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius-xs); cursor: pointer; transition: background .1s; }
 .lad-row:hover { background: var(--surface-2); }
 .lad-lab { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-.lad-track { height: 8px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
-.lad-fill { height: 100%; border-radius: 999px; background: var(--series-4); }
+.lad-track { height: 11px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+.lad-fill { height: 100%; border-radius: 3px; background: var(--series-4); }
 .lad-val { text-align: right; font-size: 0.82rem; font-weight: 720; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+
+/* 둥근 사각형 막대 미터 (rounded-rect bar) — 강조형 tick/pill 막대 대체 */
+.rrbar { position: relative; flex: 1; height: 11px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+.rrbar-fill { height: 100%; border-radius: 3px; min-width: 3px; transition: width .15s; }
 
 /* D 3중 벤치마크 */
 .bench { display: flex; flex-direction: column; gap: 12px; }

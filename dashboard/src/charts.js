@@ -333,7 +333,8 @@
           var wpx = x(v);
           var isFirst = si === 0, isLast = si === it.segs.length - 1;
           var eff = Math.max(0, wpx - (isLast ? 0 : gap));
-          var r = (spec.stacked ? (isLast ? 4 : 0) : 4);
+          var rx = (spec.rx == null ? 4 : spec.rx);          // 둥근 사각형 막대 모서리 반경(설정 가능)
+          var r = (spec.stacked ? (isLast ? rx : 0) : rx);
           var rect = el('rect', { x: cx, y: by, width: eff, height: barH, rx: r, ry: r },
             { fill: s.color });
           if (it.emphasize) rect.style.stroke = 'var(--kmu)';

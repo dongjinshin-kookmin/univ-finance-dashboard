@@ -284,6 +284,23 @@
     }
     return m;
   }
+  // 둥근 사각형 막대 미터 (rounded-rect bar) — 강조형 tick/pill 막대 대체용
+  function barMeter(frac, colorVar) {
+    frac = Math.max(0, Math.min(1, frac == null ? 0 : frac));
+    return h('div', { class: 'rrbar' }, [
+      h('div', { class: 'rrbar-fill', style: 'width:' + (frac * 100).toFixed(1) + '%;background:' + colorVar })
+    ]);
+  }
+  // 관/항/목 숫자 코드 배지 (컬러 스쿼클 안에 계정코드). depth 0=관,1=항,2=목.
+  function codeBadge(code, colorVar, depth) {
+    var bgPct = depth === 0 ? 22 : depth === 1 ? 13 : 7;
+    var brPct = depth === 0 ? 55 : depth === 1 ? 38 : 24;
+    var style = 'color:' + colorVar +
+      ';background:color-mix(in srgb,' + colorVar + ' ' + bgPct + '%,var(--surface-1))' +
+      ';border-color:color-mix(in srgb,' + colorVar + ' ' + brPct + '%,transparent)';
+    return h('span', { class: 'tcode lv' + (depth + 1), style: style, text: code });
+  }
+
   // 파이 글리프 (백분위 부분 채움 원)
   function pieGlyph(frac, colorVar) {
     frac = Math.max(0, Math.min(1, frac == null ? 0 : frac));
@@ -752,15 +769,36 @@
 
   // ── 계층 트리 카드 (수입/지출 각 1개) ──
   function treeCard(side, sid, yr) {
-    var total = gv(side, totCodeOf(side), sid, yr) || 1;
-    var card = h('div', { class: 'card t2-treecard' }, [
-      cardHead(side === 'in' ? 'cap' : 'scale', side === 'in' ? 'var(--series-1)' : 'var(--series-3)',
-        (side === 'in' ? '수입' : '지출') + ' 계층',
-        schools[sid].n + ' · ' + yr + '년 · 총계 ' + F.krw(total) + ' · 관→항' + (LITE ? '' : '→목') + ' (행 클릭 선택)'),
+    var totCode = totCodeOf(side);
+    var total = gv(side, totCode, sid, yr);
+    var prevTot = gv(side, totCode, sid, yr - 1);
+    var yoy = (total != null && prevTot != null && prevTot !== 0) ? (total - prevTot) / prevTot : null;
+    var totDelta = (total != null && prevTot != null) ? total - prevTot : null;
+    var sideWord = side === 'in' ? '수입' : '지출';
+    var sideColor = side === 'in' ? 'var(--series-1)' : 'var(--series-3)';
+    var totName = side === 'in' ? '자금수입총계' : '자금지출총계';
+
+    var deltaPill = h('span', { class: 'delta-pill neu', html: yoy == null ? '—' :
+      ((yoy >= 0 ? '▲' : '▼') + ' ' + F.pct(Math.abs(yoy), 1) +
+       ' <span class="dp-vs">' + (totDelta == null ? '' : F.eokDelta(totDelta) + ' · ') + 'vs ' + (yr - 1) + '</span>') });
+
+    var head = h('div', { class: 't2-treehead' }, [
+      iconTile('th-ico', side === 'in' ? 'cap' : 'scale', sideColor),
+      h('div', { class: 'th-body' }, [
+        h('div', { class: 'th-title', text: sideWord + ' 계층' }),
+        h('div', { class: 'th-totlabel', text: '총 ' + sideWord + ' · ' + totName }),
+        h('div', { class: 'th-totrow' }, [
+          h('span', { class: 'th-total', style: 'color:' + sideColor, text: F.eok(total) }),
+          deltaPill,
+        ]),
+        h('div', { class: 'th-sub', text: schools[sid].n + ' · ' + yr + '년 · 관→항' + (LITE ? '' : '→목') + ' (행 클릭 선택)' }),
+      ]),
     ]);
+
+    var card = h('div', { class: 'card t2-treecard' }, [head]);
     var tree = h('div', { class: 'tree' });
     tree.appendChild(treeHeader());
-    rootsOf(side).forEach(function (root, ri) { appendTreeNode(tree, side, root, sid, yr, total, 0, treeColor(ri)); });
+    rootsOf(side).forEach(function (root) { appendTreeNode(tree, side, root, sid, yr, total || 1, 0, sideColor); });
     card.appendChild(tree);
     return card;
   }
@@ -774,7 +812,7 @@
       h('div', { text: '전년비', style: 'text-align:right' })
     ]);
   }
-  function appendTreeNode(container, side, acc, sid, yr, total, depth, rootColor) {
+  function appendTreeNode(container, side, acc, sid, yr, total, depth, sideColor) {
     if (LITE && acc.lv === 3) return;
     var val = gv(side, acc.code, sid, yr) || 0;
     var prev = gv(side, acc.code, sid, yr - 1);
@@ -795,16 +833,16 @@
     }, [
       h('div', { class: 'tname' + (depth ? ' indent-' + depth : '') }, [
         h('span', { class: 'caret', text: hasKids ? (open ? '▾' : '▸') : '' }),
-        depth === 0 ? h('span', { class: 'tsq', style: 'background:' + rootColor }) : null,
-        h('span', { class: 'nm', text: acc.name }),
+        codeBadge(acc.code, sideColor, depth),
+        h('span', { class: 'nm', text: acc.name, title: acc.name }),
       ]),
-      h('div', { class: 'tbar-wrap' }, [h('div', { class: 'tbar', style: 'width:' + (Math.max(1, share * 100)).toFixed(1) + '%;background:' + rootColor + ';opacity:' + (depth === 0 ? '1' : depth === 1 ? '0.72' : '0.5') })]),
-      h('div', { class: 'tval', text: F.krw(val) }),
+      h('div', { class: 'tbar-wrap' }, [h('div', { class: 'tbar', style: 'width:' + (Math.max(1, share * 100)).toFixed(1) + '%;background:' + sideColor + ';opacity:' + (depth === 0 ? '1' : depth === 1 ? '0.72' : '0.5') })]),
+      h('div', { class: 'tval', text: F.eok(val) }),
       h('div', { class: 'tshare', text: F.pct(share, 1) }),
       h('div', { class: 'tyoy ' + (yoy == null ? '' : (yoy >= 0 ? 'up' : 'down')), text: yoy == null ? '—' : (yoy >= 0 ? '+' : '') + F.pct(yoy, 1) }),
     ]);
     container.appendChild(node);
-    if (hasKids && open) kids.forEach(function (k) { appendTreeNode(container, side, k, sid, yr, total, depth + 1, rootColor); });
+    if (hasKids && open) kids.forEach(function (k) { appendTreeNode(container, side, k, sid, yr, total, depth + 1, sideColor); });
   }
   function treeColor(ri) { return 'var(--series-' + ((ri % 8) + 1) + ')'; }
 
@@ -837,7 +875,7 @@
     var card = h('div', { class: 'card apanel-head' }, [
       h('div', { class: 'ap-crumb', html: sideWord + ' › ' + breadcrumbChain(side, code) }),
       h('div', { class: 'ap-banrow' }, [
-        h('div', { class: 'ap-ban', text: val == null ? '—' : F.krw(val) }),
+        h('div', { class: 'ap-ban', text: val == null ? '—' : F.eok(val) }),
         h('span', { class: 'delta-pill neu', html: rate == null ? '—' :
           ((rate >= 0 ? '▲' : '▼') + ' ' + F.pct(Math.abs(rate), 1) + ' <span class="dp-vs">vs ' + (yr - 1) + '</span>') }),
       ]),
@@ -904,7 +942,7 @@
       C.line(box, { height: 220, yZero: true,
         series: [{ name: schools[sid].n, color: selfColor, points: self, emphasize: true },
                  { name: '모집단 중앙값', color: 'var(--muted)', points: mid, dashed: true, dim: true }],
-        xTicks: [2016, 2018, 2020, 2022, 2024], yFmt: F.krwAxis, tipFmt: F.krw });
+        xTicks: [2016, 2018, 2020, 2022, 2024], yFmt: F.krwAxis, tipFmt: F.eok });
     } else {
       var shr = function (p, y) { var vv = gv(side, code, p, y), tt = gv(side, totCode, p, y); return (vv != null && tt) ? vv / tt : null; };
       var selfS = yrs.map(function (y) { return [y, shr(sid, y)]; });
@@ -946,7 +984,7 @@
       var diffClr = (side === 'ex' && diff != null && diff > 0) ? 'var(--serious)' : 'var(--text-secondary)';
       body.appendChild(h('div', { class: 'bench-row' }, [
         h('div', { class: 'bench-head' }, [h('span', { class: 'bench-name', text: g.name }), h('span', { class: 'bench-n', text: 'n=' + n })]),
-        h('div', { class: 'bench-meter' }, [tickMeter(pctile, 'var(--kmu)'),
+        h('div', { class: 'bench-meter' }, [barMeter(pctile, 'var(--kmu)'),
           h('span', { class: 'meter-val', style: 'color:var(--kmu)', text: pctile == null ? '—' : F.percentileLabel(pctile) })]),
         h('div', { class: 'bench-diff', style: 'color:' + diffClr, text: diff == null ? '집단 평균 대비 —' : ('집단 평균 대비 ' + (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%p') }),
       ]));
@@ -970,7 +1008,7 @@
     return h('div', { class: 'card' }, [
       cardHead('users', 'var(--series-5)', '학생 1인당', schools[sid].scale + ' 집단 · 재학생 ' + F.intComma(enr) + '명'),
       h('div', { class: 'per-ban' }, [h('span', { class: 'per-val', text: F.krw(per) }), h('span', { class: 'per-unit', text: '/ 학생 1인' })]),
-      h('div', { class: 'meter-row' }, [h('span', { class: 'meter-lab', text: '같은 규모 백분위' }), tickMeter(pctile, 'var(--series-5)'),
+      h('div', { class: 'meter-row' }, [h('span', { class: 'meter-lab', text: '같은 규모 백분위' }), barMeter(pctile, 'var(--series-5)'),
         h('span', { class: 'meter-val', style: 'color:var(--series-5)', text: pctile == null ? '—' : F.percentileLabel(pctile) })]),
     ]);
   }
@@ -1849,6 +1887,15 @@
     check('홈 랜딩 렌더 + 메뉴 카드 내비게이션',
       heroOk && homeCards.length === 7 && !!firstCard && S.tab === 'overview' &&
       document.querySelectorAll('#view svg').length > 0);
+
+    // 7) F.eok 억원 포맷 단위 테스트 (천원 → "1,234.5억원")
+    check('F.eok 억원 포맷', F.eok(345670000) === '3,456.7억원' && F.eok(-12345) === '-0.1억원' && F.eok(null) === '—');
+
+    // 8) 수지 구조 트리 — 관항목 숫자 코드 배지 존재 + 4자리 코드 표기
+    S.tab = 'structure'; S.t2_school = KMU_ID; S.t2_year = Y_LAST; S.t2_open.add('ex:4100'); render();
+    var badges = document.querySelectorAll('#view .tcode');
+    check('트리 코드 배지 렌더 + 코드 표기', badges.length > 0 && /^\d{3,4}$/.test((badges[0].textContent || '').trim()));
+    S.t2_open.delete('ex:4100');
 
     S.t2_year = Y_LAST; S.tab = 'overview'; render();
 

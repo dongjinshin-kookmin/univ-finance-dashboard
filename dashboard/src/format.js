@@ -29,6 +29,25 @@
     return sign + comma(Math.round(a)) + '천원';
   }
 
+  /* 억원 고정 포맷 (입력 = 천원 단위). 수지 구조 탭 전용 단위 통일.
+   * 1억 = 1e5 천원. 항상 "1,234.5억원"(천단위 콤마 + 소수점 1자리 + 억원).
+   * opt.noUnit=true → 단위(억원) 생략, 숫자만. */
+  function eok(v, opt) {
+    opt = opt || {};
+    if (v === null || v === undefined || (typeof v === 'number' && isNaN(v))) return '—';
+    var sign = v < 0 ? '-' : '';
+    var s = (Math.abs(v) / 1e5).toFixed(1);   // 천원 → 억원, 소수 1자리
+    var parts = s.split('.');
+    parts[0] = comma(parts[0]);
+    return sign + parts.join('.') + (opt.noUnit ? '' : '억원');
+  }
+
+  // 억원 델타(전년 대비 등): 양수 '+' 부호 포함
+  function eokDelta(v) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    return (v >= 0 ? '+' : '') + eok(v);
+  }
+
   // 축 눈금용 짧은 금액 (억/조 단위, 소수 최대 1자리)
   function krwAxis(v) {
     if (v === null || v === undefined || isNaN(v)) return '';
@@ -85,6 +104,8 @@
   global.FMT = {
     comma: comma,
     krw: krw,
+    eok: eok,
+    eokDelta: eokDelta,
     krwAxis: krwAxis,
     pct: pct,
     pctPoint: pctPoint,
