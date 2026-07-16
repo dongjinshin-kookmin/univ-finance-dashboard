@@ -775,8 +775,8 @@ table.risk-table .rt-name { display: inline-flex; align-items: center; gap: 7px;
 .yearchips .yearchip { font-variant-numeric: tabular-nums; font-weight: 650; }
 .chip.disabled { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
 
-/* 트리 카드는 목(目) 계정명 길이에 맞춰 타이트하게, 분석 패널은 넓게 */
-.t2-grid { display: grid; grid-template-columns: minmax(500px, 600px) minmax(0, 1fr); gap: clamp(16px, 1.6vw, 22px); align-items: start; }
+/* 트리(수입·지출 계층) 60% : 분석 패널 40% */
+.t2-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 4fr); gap: clamp(16px, 1.6vw, 22px); align-items: start; }
 .t2-trees { display: flex; flex-direction: column; gap: clamp(16px, 1.6vw, 22px); min-width: 0; }
 .t2-treecard { padding: 18px 18px 12px; }
 .t2-panel { position: sticky; top: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
