@@ -860,6 +860,48 @@ table.sim-table tr.sim-self td { background: var(--surface-2); font-weight: 700;
 table.sim-table tr.kmu-row td { background: var(--kmu-soft-2); }
 table.sim-table tr.sim-self.kmu-row td { background: var(--kmu-soft-2); font-weight: 750; }
 
+/* ══ 계정 분석 탭 (자동 인사이트 + 매트릭스) ═══════════════ */
+/* 섹션 1 — 인사이트 카드 */
+.acc-insights .card { padding: 16px 18px; }
+.acc-insights .card-head { margin-bottom: 12px; }
+.ins-list { display: flex; flex-direction: column; gap: 3px; }
+.ins-item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  width: 100%; text-align: left; padding: 7px 8px; border: none; background: transparent;
+  border-radius: var(--radius-xs); cursor: pointer; font: inherit; color: var(--text-primary); transition: background .1s;
+}
+.ins-item:hover { background: var(--surface-2); }
+.ins-item .ins-nm { font-size: 0.86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ins-right { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; line-height: 1.2; }
+.ins-right .ins-pct { font-size: 0.8rem; font-weight: 740; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.ins-right .ins-sub { font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ins-empty { padding: 10px 8px; color: var(--muted); font-size: 0.82rem; }
+.acc-insights .footnote { font-size: 0.72rem; }
+
+/* 섹션 2 — 전 계정 매트릭스 */
+.acc-wrap { margin-top: 4px; }
+table.acc-matrix { font-size: 0.82rem; }
+table.acc-matrix th, table.acc-matrix td { padding: 7px 8px; }
+table.acc-matrix th.spk, table.acc-matrix td.spk { text-align: right; }
+table.acc-matrix .acc-name-in { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 260px; }
+table.acc-matrix .acc-nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.acc-matrix tr.acc-row { cursor: pointer; }
+table.acc-matrix tr.acc-row.lv1 { font-weight: 720; }
+table.acc-matrix tr.acc-row.lv1 td { border-top: 1px solid var(--border); }
+table.acc-matrix tr.acc-row.lv3 .acc-nm { color: var(--text-secondary); }
+table.acc-matrix tr.acc-hl td { background: var(--kmu-soft) !important; }
+table.acc-matrix tr.acc-hl td:first-child { box-shadow: inset 3px 0 0 var(--kmu); }
+.acc-spark { display: inline-block; width: 74px; height: 30px; vertical-align: middle; }
+.acc-bench { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.acc-bench .mini-rr { width: 40px; height: 7px; border-radius: 999px; background: var(--surface-3); overflow: hidden; flex-shrink: 0; }
+.acc-bench .mini-rr-fill { height: 100%; border-radius: 999px; min-width: 3px; }
+.acc-bench .meter-val { font-size: 0.68rem; font-weight: 680; color: var(--text-secondary); min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+.cv-badge { display: inline-flex; align-items: center; font-size: 0.68rem; font-weight: 720; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.cv-badge.rigid { background: var(--good-soft); color: var(--good); }
+.cv-badge.mid { background: var(--surface-2); color: var(--text-secondary); }
+.cv-badge.volatile { background: var(--warn-soft); color: var(--serious); }
+table.acc-matrix .muted-dash { color: var(--muted); }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
