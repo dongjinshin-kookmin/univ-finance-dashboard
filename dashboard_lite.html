@@ -2941,6 +2941,13 @@ table.acc-matrix .muted-dash { color: var(--muted); }
     var hits = [], active = -1;
     function cand(q) { var out = []; schools.forEach(function (s, i) { if (q && s.n.indexOf(q) < 0) return; out.push(i); }); return out.slice(0, 12); }
     function pick(i) { onPick(i); }
+    // active 하이라이트만 갱신(옵션 DOM 재생성 없음). mouseenter가 draw()로 옵션을
+    // 통째로 재생성하면, 커서 아래 옵션이 detach되어 곧이어 발생할 mousedown(선택)이
+    // 유실됨 → 대학을 클릭해도 반영 안 되는 버그. 클래스 토글로만 강조.
+    function hi() {
+      var kids = drop.querySelectorAll('.ss-opt');
+      for (var k = 0; k < kids.length; k++) kids[k].classList.toggle('active', k === active);
+    }
     function draw() {
       drop.innerHTML = ''; drop.style.display = 'block';
       if (!hits.length) { drop.appendChild(h('div', { class: 'ss-empty', text: input.value.trim() ? '일치하는 대학이 없습니다' : '대학명을 입력하세요' })); return; }
@@ -2948,16 +2955,22 @@ table.acc-matrix .muted-dash { color: var(--muted); }
         var o = h('div', { class: 'ss-opt' + (k === active ? ' active' : '') + (i === KMU_ID ? ' kmu' : ''),
           html: '<span class="ss-nm">' + schools[i].n + (schools[i].kmu ? ' ★' : '') + '</span><span class="ss-region">' + schools[i].region + ' · ' + schools[i].scale + '</span>' });
         o.addEventListener('mousedown', function (e) { e.preventDefault(); pick(i); });
-        o.addEventListener('mouseenter', function () { active = k; draw(); });
+        o.addEventListener('mouseenter', function () { active = k; hi(); });
         drop.appendChild(o);
       });
+    }
+    // 방향키 이동: 옵션이 이미 그려져 있으면 하이라이트만, 아니면(숨김 상태 등) 재생성.
+    function nav(delta) {
+      if (!hits.length) return;
+      active = (active + delta + hits.length) % hits.length;
+      if (drop.style.display === 'none' || !drop.querySelector('.ss-opt')) draw(); else hi();
     }
     function refr() { hits = cand(input.value.trim()); active = hits.length ? 0 : -1; draw(); }
     input.addEventListener('input', refr); input.addEventListener('focus', refr);
     input.addEventListener('blur', function () { setTimeout(function () { drop.style.display = 'none'; }, 150); });
     input.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); if (hits.length) { active = (active + 1) % hits.length; draw(); } }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); if (hits.length) { active = (active - 1 + hits.length) % hits.length; draw(); } }
+      if (e.key === 'ArrowDown') { e.preventDefault(); nav(1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); nav(-1); }
       else if (e.key === 'Enter') { e.preventDefault(); if (active >= 0 && hits[active] != null) pick(hits[active]); }
       else if (e.key === 'Escape') { drop.style.display = 'none'; }
     });
@@ -4817,6 +4830,29 @@ table.acc-matrix .muted-dash { color: var(--muted); }
     var badges = document.querySelectorAll('#view .tcode');
     check('트리 코드 배지 렌더 + 코드 표기', badges.length > 0 && /^\d{3,4}$/.test((badges[0].textContent || '').trim()));
     S.t2_open.delete('ex:4100');
+
+    // 8-b) 수지 구조 대학 검색 선택 시 트리 데이터 갱신 (회귀 방지)
+    //   - mouseenter가 옵션 DOM을 재생성하지 않아야(detach되면 실제 클릭에서 mousedown 유실)
+    //   - 선택 후 S.t2_school 전환 + 트리 헤더가 새 대학명으로 갱신
+    S.tab = 'structure'; S.t2_school = KMU_ID; S.t2_year = Y_LAST; render();
+    var beforeSub = (document.querySelector('#view .t2-treehead .th-sub') || {}).textContent || '';
+    var ssInput = document.querySelector('#view .school-search input');
+    var otherIdx = -1; for (var _i = 0; _i < schools.length; _i++) { if (_i !== KMU_ID) { otherIdx = _i; break; } }
+    var switchOk = false, stayConnected = false;
+    if (ssInput && otherIdx >= 0) {
+      ssInput.value = schools[otherIdx].n;
+      ssInput.dispatchEvent(new Event('input', { bubbles: true }));
+      var opt0 = document.querySelector('#view .school-search .ss-opt');
+      if (opt0) {
+        opt0.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+        stayConnected = opt0.isConnected;              // fix 전: draw() 재생성으로 false
+        opt0.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        var afterSub = (document.querySelector('#view .t2-treehead .th-sub') || {}).textContent || '';
+        switchOk = S.t2_school !== KMU_ID && afterSub.indexOf(schools[S.t2_school].n) >= 0 && afterSub !== beforeSub;
+      }
+    }
+    check('수지 구조 대학 검색 선택 시 트리 데이터 갱신', stayConnected && switchOk);
+    S.t2_school = KMU_ID;
 
     // 9) 계정 분석 탭 — 매트릭스 렌더 + 행 존재
     S.tab = 'accounts'; S.t8_school = KMU_ID; S.t8_year = Y_LAST; S.t8_side = 'ex'; S.t8_depth = 'gwanhang'; S.t8_zero = false; S.t8_hl = null; render();
