@@ -327,6 +327,11 @@
   function applySettings(next) {
     var norm = computeDerived(next);          // 검증·정규화 + 파생 전역 + 시각 게이트
     BENCH.invalidate();                        // 설정 변경 → 기준군 무효화
+    // 설정 파생 기본값에 의존하는 뷰 상태를 콜드로드(init)와 동일하게 리시드(P3 통합):
+    // 저장 즉시 비교 프리시드(메인+경쟁)·시뮬 기본 대학이 새 메인을 따르도록 —
+    // refresh()만으로는 옛 메인 기준 S 상태가 남아 F5 전까지 불일치했음.
+    S.t4_schools = compareDefault();
+    S.sim_school = MAIN_ID;
     var res = SET.save(norm);                  // 지속(전 경로 try/catch)
     refresh();                                 // 무캐시 단일 재렌더로 전파(§2.3)
     return { ok: res.ok, persisted: res.persisted, error: res.error, settings: norm };
