@@ -512,16 +512,224 @@
   }
 
   // ═══════════════════════════════════════════════════════
-  //  탭 10 — 기본설정 (P0 스텁 · 실제 구현은 P1)
+  //  탭 10 — 기본설정 (P1)
   // ═══════════════════════════════════════════════════════
-  // P1 계약: applySettings(next)로 저장, SETTINGS_STATE로 현재값 조회, BENCH.counts()로
-  //  기준군 멤버수, buildSchoolSearch(curSid,onPick,width)로 대학 선택. 색/강조는
-  //  schoolColor(엔티티)·schoolEmphasis(메인) 사용. SET(window.SETTINGS)로 내보내기/가져오기.
+  // 편집은 인메모리 초안(draft)에 즉시 반영(미리보기 카운트 갱신), "저장"에서만
+  // applySettings()로 지속 + 파생전역 재계산 + refresh(). 저장 시 typeFilter를
+  // S.types(사이드바)에도 반영(기본설정=전역 필터라는 사용자 멘탈 모델과 일치).
+  // 색/강조는 schoolColor(엔티티)·schoolEmphasis(메인), SET(window.SETTINGS)로 이관.
+
+  // 화면에 잠깐 떠서 알리는 토스트(#view 밖 body에 붙어 재렌더에도 생존).
+  function settingsToast(text, kind) {
+    if (typeof document === 'undefined' || !document.body) return;
+    var t = h('div', { class: 'settings-toast' + (kind ? ' ' + kind : ''), text: text });
+    document.body.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(function () {
+      t.classList.remove('show');
+      setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 320);
+    }, 2600);
+  }
+  // 초안 typeFilter로 전국·수도권 멤버수 미리보기(적용 전이므로 BENCH 대신 직접 계산).
+  function previewCounts(typeFilter) {
+    var ts = new Set(typeFilter), nat = 0, metro = 0;
+    schools.forEach(function (s) { if (ts.has(s.type)) { nat++; if (s.region === '수도권') metro++; } });
+    return { national: nat, metro: metro };
+  }
+
   function renderSettings(v) {
-    v.appendChild(h('div', { class: 'card' }, [
-      cardHead('settings', 'var(--main)', '기본설정', '메인 대학 · 경쟁대학 · 집계 필터 (준비 중)'),
-      h('p', { class: 'hint', text: '설정 페이지는 준비 중입니다.' }),
-    ]));
+    // 진입 시마다 현재 적용 설정의 사본으로 초안 시작(적용 전 편집 = 미리보기).
+    var draft = JSON.parse(JSON.stringify(SETTINGS_STATE));
+    var host = h('div', { class: 'settings-page' });
+    v.appendChild(host);
+
+    function build() {
+      host.innerHTML = '';
+      var mainId = idByName(draft.mainSchoolName);
+      var mainOk = mainId >= 0;
+      var dispMainId = mainOk ? mainId : (KMU_ID >= 0 ? KMU_ID : 0);
+
+      // ── 카드 ① 메인 분석 대학 ─────────────────────────────
+      var mainInfo = h('div', { class: 'set-mainbox' });
+      var ms = schools[dispMainId];
+      var enr = enrollOf(dispMainId, Y_LAST);
+      var finR = latestOf(function (s, y) { return kv('운영수지율', s, y); }, dispMainId);
+      mainInfo.appendChild(h('div', { class: 'set-mainname' }, [
+        h('span', { class: 'set-mainbadge', text: '메인' }),
+        h('strong', { text: mainOk ? ms.n : (draft.mainSchoolName + ' (미해석 → ' + ms.n + ')') }),
+        schools[dispMainId].kmu ? h('span', { class: 'set-kmu-tag', text: '국민대' }) : null,
+      ]));
+      mainInfo.appendChild(h('div', { class: 'set-mainmeta', text:
+        ms.region + ' · ' + ms.scale + (enr ? ' · 재학생 ' + enr.toLocaleString() + '명(' + Y_LAST + ')' : ' · 재학생 정보 없음') }));
+      if (!finR) mainInfo.appendChild(h('div', { class: 'set-warn-inline', text: '⚠ 최근 재무데이터가 없어 일부 지표가 표시되지 않을 수 있습니다.' }));
+
+      var mainSearch = buildSchoolSearch(dispMainId, function (i) {
+        var nm = schools[i].n;
+        draft.mainSchoolName = nm;
+        // 메인이 경쟁에 있으면 자동 제외(서로소, §7-1)
+        var idx = draft.competitorNames.indexOf(nm);
+        if (idx >= 0) {
+          draft.competitorNames.splice(idx, 1);
+          build();
+          settingsToast('메인 대학은 경쟁대학에서 자동 제외되었습니다', 'warn');
+          return;
+        }
+        build();
+      }, 300);
+
+      host.appendChild(h('div', { class: 'card' }, [
+        cardHead('settings', 'var(--main)', '① 메인 분석 대학', '분석 주체가 되는 대학 (기본 국민대학교)'),
+        mainSearch,
+        mainInfo,
+      ]));
+
+      // ── 카드 ② 경쟁대학 (1~7) ─────────────────────────────
+      var comps = SET.sortKo(draft.competitorNames);
+      var chipRow = h('div', { class: 'set-chips' });
+      comps.forEach(function (nm) {
+        var cid = idByName(nm);
+        var chip = h('span', { class: 'set-chip', html:
+          '<i style="background:' + C.resolveColor(cid >= 0 ? schoolColor(cid) : 'var(--muted)') + '"></i>' + nm });
+        var x = h('span', { class: 'set-chip-x' + (comps.length <= 1 ? ' off' : ''), text: '✕' });
+        if (comps.length > 1) {
+          x.addEventListener('click', function () {
+            var idx = draft.competitorNames.indexOf(nm);
+            if (idx >= 0) draft.competitorNames.splice(idx, 1);
+            build();
+          });
+        } else {
+          x.setAttribute('title', '경쟁대학은 최소 1개가 필요합니다');
+        }
+        chip.appendChild(x);
+        chipRow.appendChild(chip);
+      });
+
+      var addSearch = buildSchoolSearch(dispMainId, function (i) {
+        var nm = schools[i].n;
+        if (nm === draft.mainSchoolName) { settingsToast('메인 대학은 경쟁대학에 추가할 수 없습니다', 'warn'); return; }
+        if (draft.competitorNames.indexOf(nm) >= 0) { settingsToast('이미 추가된 경쟁대학입니다', 'warn'); return; }
+        if (draft.competitorNames.length >= 7) { settingsToast('경쟁대학은 최대 7개까지 추가할 수 있습니다', 'warn'); return; }
+        draft.competitorNames.push(nm);
+        build();
+      }, 300);
+
+      var restore6 = h('button', { class: 'btn-mini', type: 'button', text: '기본 6개교 복원',
+        onClick: function () {
+          var d = SET.defaults().competitorNames.filter(function (n) {
+            return n !== draft.mainSchoolName && SCHOOL_NAMES.has(n);
+          });
+          draft.competitorNames = d;
+          build();
+          settingsToast('기본 경쟁 6개교로 되돌렸습니다 (저장 필요)', 'ok');
+        } });
+
+      host.appendChild(h('div', { class: 'card' }, [
+        cardHead('compare', 'var(--series-4)', '② 경쟁대학', '개별 비교선으로 쓰이는 대학 (1~7개, 집계 필터 미적용)'),
+        h('div', { class: 'set-count-tag', text: comps.length + ' / 7개' }),
+        chipRow,
+        h('div', { class: 'set-addrow' }, [
+          h('span', { class: 'set-addlabel', text: '추가 —' }),
+          addSearch,
+          restore6,
+        ]),
+      ]));
+
+      // ── 카드 ③ 집계 필터(typeFilter) ─────────────────────
+      var pc = previewCounts(draft.typeFilter);
+      var typeSet = new Set(draft.typeFilter);
+      var typeRow = h('div', { class: 'set-types' });
+      SET.ALL_TYPES.forEach(function (ty) {
+        var on = typeSet.has(ty);
+        var cnt = schools.filter(function (s) { return s.type === ty; }).length;
+        var b = h('button', { class: 'set-typechip' + (on ? ' on' : ''), type: 'button',
+          html: '<span class="stc-check">' + (on ? '✓' : '') + '</span>' + ty + ' <span class="stc-n">' + cnt + '</span>',
+          onClick: function () {
+            if (on && draft.typeFilter.length <= 1) { settingsToast('집계 형태는 최소 1개가 필요합니다', 'warn'); return; }
+            if (on) draft.typeFilter = draft.typeFilter.filter(function (t) { return t !== ty; });
+            else draft.typeFilter = draft.typeFilter.concat([ty]);
+            build();
+          } });
+        typeRow.appendChild(b);
+      });
+      var mainType = schools[dispMainId].type;
+      var mainExcluded = !typeSet.has(mainType);
+      host.appendChild(h('div', { class: 'card' }, [
+        cardHead('data', 'var(--series-5)', '③ 집계 필터', '전국·수도권 기준군의 집계 대상 형태 (경쟁대학에는 미적용)'),
+        typeRow,
+        h('div', { class: 'set-counts' }, [
+          h('span', { class: 'set-countpill', html: '전국 <b>' + pc.national + '</b>' }),
+          h('span', { class: 'set-countpill', html: '수도권 <b>' + pc.metro + '</b>' }),
+          h('span', { class: 'set-countpill', html: '경쟁 <b>' + comps.length + '</b>' }),
+        ]),
+        mainExcluded ? h('div', { class: 'set-warn-inline', text:
+          '⚠ 메인 대학(' + mainType + ')이 현재 집계 필터에 포함되지 않아, 전국·수도권 집계 모집단에서는 제외되고 개별 값으로만 표시됩니다.' }) : null,
+      ]));
+
+      // ── 카드 ④ 저장 · 초기화 · 이관 ──────────────────────
+      var storable = SET.storageAvailable();
+      var saveBtn = h('button', { class: 'btn-primary', type: 'button', text: '저장',
+        onClick: function () {
+          // 저장 시 typeFilter를 S.types(사이드바)에도 동기화(전역 필터 일치).
+          S.types = new Set(draft.typeFilter);
+          var res = applySettings(draft);   // 정규화·파생전역·지속·refresh() 1회(→ 이 페이지 재렌더)
+          if (res.persisted) settingsToast('저장되었습니다', 'ok');
+          else settingsToast(res.error || '세션에만 적용됩니다 — 내보내기로 백업하세요', 'warn');
+        } });
+      var resetBtn = h('button', { class: 'btn-ghost', type: 'button', text: '기본값 복원',
+        onClick: function () {
+          if (!window.confirm('모든 설정을 기본값(메인=국민대학교, 경쟁 6개교, 집계=대학)으로 되돌립니다. 계속할까요?')) return;
+          draft = SET.defaults();
+          build();
+          settingsToast('기본값으로 되돌렸습니다 (저장을 눌러 적용)', 'ok');
+        } });
+
+      var actions = h('div', { class: 'set-actions' }, [saveBtn, resetBtn]);
+
+      // 내보내기 / 가져오기
+      var exArea = h('textarea', { class: 'set-json', readonly: 'readonly', rows: '5' });
+      exArea.value = SET.exportJSON(draft);
+      var copyBtn = h('button', { class: 'btn-mini', type: 'button', text: '클립보드 복사',
+        onClick: function () {
+          var done = function () { settingsToast('설정 JSON을 복사했습니다', 'ok'); };
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(exArea.value).then(done, function () { exArea.select(); settingsToast('복사 실패 — 텍스트를 직접 선택해 복사하세요', 'warn'); });
+            } else { exArea.select(); document.execCommand && document.execCommand('copy'); done(); }
+          } catch (e) { exArea.select(); settingsToast('복사 실패 — 텍스트를 직접 선택해 복사하세요', 'warn'); }
+        } });
+      var imArea = h('textarea', { class: 'set-json', rows: '5', placeholder: '내보낸 설정 JSON을 붙여넣고 "가져오기"를 누르세요…' });
+      var imBtn = h('button', { class: 'btn-mini', type: 'button', text: '가져오기',
+        onClick: function () {
+          var txt = imArea.value.trim();
+          if (!txt) { settingsToast('가져올 JSON을 붙여넣으세요', 'warn'); return; }
+          var res = SET.importJSON(txt);
+          if (!res.ok) { settingsToast(res.error || 'JSON을 인식할 수 없습니다', 'warn'); return; }
+          draft = SET.normalize(res.settings, { validNames: SCHOOL_NAMES });
+          build();
+          settingsToast('가져왔습니다 — "저장"을 눌러 적용하세요', 'ok');
+        } });
+
+      var transfer = h('div', { class: 'set-transfer' }, [
+        h('div', { class: 'set-transfer-col' }, [
+          h('div', { class: 'set-sub', text: '내보내기 — 현재 편집 중인 설정' }),
+          exArea, copyBtn,
+        ]),
+        h('div', { class: 'set-transfer-col' }, [
+          h('div', { class: 'set-sub', text: '가져오기 — JSON 붙여넣기' }),
+          imArea, imBtn,
+        ]),
+      ]);
+
+      host.appendChild(h('div', { class: 'card' }, [
+        cardHead('settings', 'var(--main)', '④ 저장 · 이관', '변경은 저장 전까지 미리보기입니다'),
+        !storable ? h('div', { class: 'set-warn-banner', text:
+          '이 브라우저에서는 설정이 저장되지 않습니다 — 아래 내보내기로 백업하세요.' }) : null,
+        actions,
+        transfer,
+      ]));
+    }
+
+    build();
   }
 
   // ═══════════════════════════════════════════════════════
@@ -543,8 +751,10 @@
 
   function renderHome(v) {
     var wrap = h('div', { class: 'home' });
+    var isKmuMain = (MAIN_ID === KMU_ID);
 
-    // ── 히어로 (가공 사진 + 네이비 그라데이션 오버레이) ──
+    // ── 히어로 (메인=국민대 → 80주년 캠퍼스 사진, 그 외 → 중립 그라데이션) ──
+    // 히어로 스탯은 분석 주체(MAIN_ID) 기준. 사진 게이트는 body[data-main]로 CSS 처리.
     var stats = h('div', { class: 'hero-stats' });
     [
       { name: '등록금의존율_총계', label: '등록금의존율' },
@@ -552,20 +762,21 @@
       { name: '교육비환원율', label: '교육비환원율' },
     ].forEach(function (s) {
       var meta = KPI_META[s.name];
-      var r = latestOf(function (sid, y) { return kv(s.name, sid, y); }, KMU_ID);
+      var r = latestOf(function (sid, y) { return kv(s.name, sid, y); }, MAIN_ID);
       stats.appendChild(h('div', { class: 'hero-stat' }, [
         h('div', { class: 'hs-val', text: r ? F.byFmt(r.v, meta.fmt) : '—' }),
         h('div', { class: 'hs-lab', text: s.label + (r ? ' · ' + r.year : '') }),
       ]));
     });
 
+    var eyebrowMark = h('span', { class: 'brand-mark sq' + (isKmuMain ? '' : ' main'),
+      text: isKmuMain ? 'KMU' : (MAIN_NAME ? MAIN_NAME.slice(0, 2) : '대학') });
+    var eyebrowTxt = h('span', { text: isKmuMain ? '국민대학교 · 개교 80주년 캠퍼스' : (MAIN_NAME + ' · 분석 주체 대학') });
+
     var hero = h('div', { class: 'home-hero' }, [
       h('div', { class: 'home-hero-scrim' }),
       h('div', { class: 'home-hero-inner' }, [
-        h('div', { class: 'hero-eyebrow' }, [
-          h('span', { class: 'brand-mark sq', text: 'KMU' }),
-          h('span', { text: '국민대학교 · 개교 80주년 캠퍼스' }),
-        ]),
+        h('div', { class: 'hero-eyebrow' }, [eyebrowMark, eyebrowTxt]),
         h('h1', { class: 'hero-title', text: '사립대학 교비회계 수지분석' }),
         h('p', { class: 'hero-sub', text:
           Y_FIRST + '~' + Y_LAST + ' · ' + schools.length + '개교 · 사학기관 재무·회계 특례규칙 기준' }),
@@ -573,6 +784,45 @@
       ]),
     ]);
     wrap.appendChild(hero);
+
+    // ── 현재 기준 설정 요약 카드 + 기본설정 버튼(§6.2) ──
+    var bc = BENCH.counts();
+    var summaryCompChips = h('div', { class: 'set-chips' });
+    SET.sortKo(SETTINGS_STATE.competitorNames).forEach(function (nm) {
+      var cid = idByName(nm);
+      summaryCompChips.appendChild(h('span', { class: 'set-chip static', html:
+        '<i style="background:' + C.resolveColor(cid >= 0 ? schoolColor(cid) : 'var(--muted)') + '"></i>' + nm }));
+    });
+    var settingsBtn = h('button', { class: 'home-settings-btn', type: 'button',
+      onClick: function () { goTab('settings'); } }, [
+        h('span', { class: 'ni-ico', html: svgIcon('settings') }),
+        h('span', { text: '기본설정' }),
+        h('span', { class: 'hsb-arrow', text: '→' }),
+      ]);
+    wrap.appendChild(h('div', { class: 'home-settings' }, [
+      h('div', { class: 'hs-body' }, [
+        h('div', { class: 'hs-eyebrow', text: '현재 기준 설정' }),
+        h('div', { class: 'hs-main' }, [
+          h('span', { class: 'set-mainbadge', text: '메인' }),
+          h('strong', { text: MAIN_NAME }),
+          isKmuMain ? h('span', { class: 'set-kmu-tag', text: '국민대' }) : null,
+        ]),
+        h('div', { class: 'hs-row' }, [
+          h('span', { class: 'hs-rowlabel', text: '경쟁대학 ' + SETTINGS_STATE.competitorNames.length + '개교' }),
+          summaryCompChips,
+        ]),
+        h('div', { class: 'hs-row' }, [
+          h('span', { class: 'hs-rowlabel', text: '집계 필터' }),
+          h('span', { class: 'hs-filterval', text: SETTINGS_STATE.typeFilter.join(' · ') }),
+        ]),
+        h('div', { class: 'set-counts' }, [
+          h('span', { class: 'set-countpill', html: '전국 <b>' + bc.national + '</b>' }),
+          h('span', { class: 'set-countpill', html: '수도권 <b>' + bc.metro + '</b>' }),
+          h('span', { class: 'set-countpill', html: '경쟁 <b>' + bc.competitor + '</b>' }),
+        ]),
+      ]),
+      settingsBtn,
+    ]));
 
     // ── 메뉴 안내 카드 그리드 ──
     wrap.appendChild(h('div', { class: 'home-menu-head' }, [
