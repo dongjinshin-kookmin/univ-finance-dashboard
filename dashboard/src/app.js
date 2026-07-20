@@ -98,6 +98,13 @@
   var SIDO_DECLINE = {};
   (EXT.region_outlook || []).forEach(function (r) { SIDO_DECLINE[r.sido] = r.decline18_2040; });
 
+  // ── 시뮬레이션 데이터(sim 블록) + 계산 엔진(window.SIM) ─────
+  var SIMD = DATA.sim || null;            // 데이터: sim.meta · sim.bySchool
+  var ENG = window.SIM || null;           // 엔진: project·scenarios·recalcSeries·residualBand
+  var HAS_SIM = !!(SIMD && SIMD.bySchool && ENG);
+  function simEntry(sid) { return SIMD && SIMD.bySchool ? SIMD.bySchool[String(sid)] : null; }
+  function simOpts(sid) { return { meta: SIMD.meta, sido: schools[sid] ? schools[sid].sido : null }; }
+
   // ── 위기 색상 (dataviz 순차 팔레트: 단일 색조, 명도 단조) ──
   // 라이트: 밝은 주홍 → 진한 적색(고위험 진함). 다크: 어두운 저위험 → 밝은 고위험.
   var RISK_STOPS_LIGHT = [[255, 197, 156], [244, 138, 92], [214, 74, 44], [140, 29, 10]];
@@ -212,6 +219,11 @@
     t8_depth: 'gwanhang',                   // 'gwan'(관) | 'gwanhang'(관+항) | 'mok'(전체·목까지)
     t8_zero: false,                         // 값 0 계정 표시 토글
     t8_hl: null,                            // 인사이트 클릭 → 매트릭스 하이라이트 코드
+    // 탭 — 입학정원 감소 시뮬레이션
+    sim_school: KMU_ID,
+    sim_focus: null,                        // KPI 델타 포커스 연도(null=투영 종착연도)
+    sim_mode: 'single',                     // 'single' 개별 대학 | 'cohort' 코호트 집계(C5)
+    sim_params: defaultSimParams(),
   };
 
   function uniq(a) { return a.filter(function (v, i) { return a.indexOf(v) === i; }); }
@@ -270,7 +282,8 @@
     book:      '<path d="M4 4h9a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H4z"/><path d="M20 4h-4a3 3 0 0 0-3 3v13a2.5 2.5 0 0 1 2.5-2.5H20z"/>',
     crisis:    '<path d="M12 3l9 16H3z"/><path d="M12 10v4"/><path d="M12 17.5v.5"/>',
     outlook:   '<path d="M3 3v18h18"/><path d="M20 8l-6 7-4-3-5 6"/><circle cx="20" cy="8" r="1.4"/>',
-    shield:    '<path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z"/><path d="M9 12l2 2 4-4"/>'
+    shield:    '<path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
+    simulation:'<path d="M4 7h9"/><circle cx="16" cy="7" r="2.4"/><path d="M18.5 7H20"/><path d="M4 12h2.5"/><circle cx="10" cy="12" r="2.4"/><path d="M12.5 12H20"/><path d="M4 17h11"/><circle cx="18" cy="17" r="2.4"/>'
   };
   function svgIcon(name) {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + (IC[name] || IC.overview) + '</svg>';
@@ -383,6 +396,7 @@
     { id: 'compare', label: '대학 비교', title: '대학 비교', eyebrow: 'Comparison · 코호트 벤치마크' },
     { id: 'crisis', label: '위기 진단', title: '위기 진단', eyebrow: 'Risk Diagnosis · 구조 리스크 지수(참고용)' },
     { id: 'outlook', label: '구조 전망', title: '구조 전망', eyebrow: 'Outlook · 학령인구 절벽과 수요-공급' },
+    { id: 'simulation', label: '감축 시뮬레이션', title: '입학정원 감소 시뮬레이션', eyebrow: 'Simulation · 정원 감축 시나리오 (베타 · 가정 기반)' },
     { id: 'data', label: '데이터·검증', title: '데이터 · 검증', eyebrow: 'Data · 항등식 검증과 원장' },
   ];
   function renderTabs() {
@@ -408,7 +422,7 @@
     var cr = document.getElementById('crumbTab'); if (cr) cr.textContent = t ? t.title : '';
     var v = document.getElementById('view');
     v.innerHTML = '';
-    ({ home: renderHome, overview: renderOverview, structure: renderStructure, accounts: renderAccounts, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, data: renderData })[S.tab](v);
+    ({ home: renderHome, overview: renderOverview, structure: renderStructure, accounts: renderAccounts, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, simulation: renderSimulation, data: renderData })[S.tab](v);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -423,6 +437,7 @@
     { id: 'compare',    c: 'var(--series-4)', desc: '최대 8개 대학 나란히 비교하고 랭킹 확인' },
     { id: 'crisis',     c: 'var(--series-7)', desc: '충원율×등록금의존율 매트릭스와 구조 리스크 지수' },
     { id: 'outlook',    c: 'var(--series-6)', desc: '학령인구 절벽과 권역별 수요-공급 전망' },
+    { id: 'simulation', c: 'var(--kmu)',      desc: '입학정원 감축 시나리오의 수입·수지·KPI 파급(베타)' },
     { id: 'data',       c: 'var(--series-1)', desc: '원데이터 탐색, 항등식 검증, CSV 다운로드' },
   ];
   function goTab(id) { S.tab = id; closeDrawer(); window.scrollTo(0, 0); render(); }
@@ -1919,6 +1934,440 @@
   }
 
   // ═══════════════════════════════════════════════════════
+  //  탭 — 입학정원 감소 시뮬레이션 (베타 · 가정 기반)
+  //  계약: build/d10_report.md · 설계: docs/시뮬레이션_모델_설계.md 2~9장
+  // ═══════════════════════════════════════════════════════
+  // KPI 델타 카드 노출 순서(설계 5.1 우선순위)
+  var SIM_KPI_CARDS = ['운영수지율', '인건비부담률', '등록금의존율_총계', '운영수지', '교육비환원율', '장학금지원율'];
+  // 백테스트 집계 게이트 결과 (sim_backtest_report §0 — 고정 검증치, 정직 노출)
+  var SIM_BT_AGG = [
+    { k: 'L1 재학 전개 MAPE', v: '3.64%', tgt: '<3%', pass: false },
+    { k: 'L2 수입(인원 given) MAPE', v: '2.06%', tgt: '<4%', pass: true },
+    { k: 'L3 종단 5110 MAPE', v: '2.47%', tgt: '<5%', pass: true },
+    { k: '|MPE| 5110 (계통편향)', v: '0.42%', tgt: '<1.5%', pass: true },
+    { k: 'skill 5110 (naive 초과)', v: '0.457', tgt: '>0', pass: true },
+  ];
+  var SIM_LIMITS = [
+    '학부 정원내 수업료(5112)만 감축에 반응 — 대학원·정원외 수입은 외생 고정(ρ_g=1.4 가정 분해).',
+    '학년별 정밀 코호트 불가(KESS 학년축 부재) → 잔존곡선 근사. 재학 전개(L1) 3% 게이트 미달 원인.',
+    '중도탈락 학교별 실측 미확보 → m_in에 순효과 흡수 + 이탈률 스트레스 슬라이더로만.',
+    '대학원 정원 정책 연동 · 국가장학금 상호작용 · 정원외 급변은 미모형(외생 고정).',
+    '인구 자연감소에 의한 충원율 하락은 기본 OFF(드리프트 λ 토글로만 노출).',
+  ];
+  var SIM_NOBT_TYPE = { '전문대학': 1, '사이버대학': 1, '대학원대학': 1 };
+
+  function defaultSimParams() {
+    var d = (SIMD && SIMD.meta && SIMD.meta.defaults) || {};
+    return {
+      r: 0, t0: 2025, horizon: 10, profile: 'immediate', rampYears: 5,
+      fillMode: 'realistic', beta: d.beta != null ? d.beta : 0.5, fMax: 1.0,
+      piMode: 'freeze', piRate: 0.02, eta5120: d.eta_5120 != null ? d.eta_5120 : 0.3,
+      gamma: d.gamma != null ? d.gamma : 0.15, dropout: d.dropout || 0, lambda: d.lambda_ || 0,
+    };
+  }
+  // 기준(base) 시나리오 파라미터 = 공유 사용자값 + 기준 번들(설계 7.1)
+  function baseScenarioParams(P) {
+    var out = {};
+    ['r', 't0', 'horizon', 'profile', 'rampYears', 'rSchedule', 'eta5120', 'dropout', 'lambda', 'fMax', 'capCarryForward']
+      .forEach(function (k) { if (P[k] !== undefined && P[k] !== null) out[k] = P[k]; });
+    out.fillMode = 'realistic'; out.beta = 0.5; out.piMode = 'freeze'; out.gamma = 0.15;
+    return out;
+  }
+
+  function renderSimulation(v) {
+    if (!HAS_SIM) {
+      v.appendChild(h('div', { class: 'card' }, [
+        h('h3', { text: '시뮬레이션 데이터 없음' }),
+        h('p', { class: 'hint', text: 'sim 블록 또는 sim_model.js 계산 엔진이 로드되지 않았습니다.' }),
+      ]));
+      return;
+    }
+    var sid = S.sim_school;
+    if (!simEntry(sid)) { S.sim_school = KMU_ID; sid = KMU_ID; }
+    var entry = simEntry(sid);
+    var P = S.sim_params;
+
+    // ── 상단 컨트롤: 모드 + 대학 검색 + 초기화 + 베타 배지 ──
+    var modeChips = h('div', { class: 'chip-row' }, [
+      h('button', { class: 'chip' + (S.sim_mode === 'single' ? ' on' : ''), text: '개별 대학', onClick: function () { S.sim_mode = 'single'; render(); } }),
+      h('button', { class: 'chip' + (S.sim_mode === 'cohort' ? ' on' : ''), text: '코호트 집계', onClick: function () { S.sim_mode = 'cohort'; render(); } }),
+    ]);
+    var searchWrap = buildSchoolSearch(sid, function (i) { S.sim_school = i; S.sim_focus = null; render(); }, 240);
+    var resetBtn = h('button', { class: 'chip', text: '↺ 파라미터 초기화', onClick: function () { S.sim_params = defaultSimParams(); S.sim_focus = null; render(); } });
+    v.appendChild(h('div', { class: 'row-controls sim-top' }, [
+      ctrl('보기 모드', modeChips),
+      S.sim_mode === 'single' ? ctrl('대학 (검색 · 기본 국민대)', searchWrap) : ctrl('집계 대상', h('span', { class: 'pill', html: '<i></i>현재 필터 모집단' })),
+      ctrl(' ', resetBtn),
+      h('span', { class: 'pill warn sim-beta', html: '<i></i>베타 · 가정 기반 — 재학 전개(L1) 3% 게이트 미달, 수입 델타는 검증됨(skill 0.46)' }),
+    ]));
+
+    // ── 파라미터 패널 + 결과 (파라미터 변경 시 결과만 debounce 재계산) ──
+    var resultsBox = h('div', { class: 'sim-results' });
+    v.appendChild(h('div', { class: 'sim-grid' }, [buildSimParamPanel(P, scheduleUpdate), resultsBox]));
+
+    var deb = null;
+    function scheduleUpdate() { clearTimeout(deb); deb = setTimeout(updateResults, 110); }
+    function updateResults() {
+      resultsBox.innerHTML = '';
+      try {
+        if (S.sim_mode === 'cohort') buildSimAggregate(resultsBox, P);
+        else buildSimResults(resultsBox, sid, entry, P);
+      } catch (e) {
+        resultsBox.appendChild(h('div', { class: 'card' }, [h('h3', { text: '계산 오류' }), h('p', { class: 'hint', text: String((e && e.message) || e) })]));
+      }
+    }
+    updateResults();
+  }
+
+  // ── 파라미터 패널 (설계 8장) ──
+  function simRange(label, key, min, max, step, fmtFn, onChange, sub) {
+    var val = S.sim_params[key];
+    var input = h('input', { type: 'range', min: min, max: max, step: step, value: val, class: 'sim-slider' });
+    var valLbl = h('span', { class: 'sim-val', text: fmtFn(val) });
+    input.addEventListener('input', function () {
+      var x = parseFloat(this.value);
+      S.sim_params[key] = x; valLbl.textContent = fmtFn(x); onChange();
+    });
+    return h('div', { class: 'sim-field' }, [
+      h('div', { class: 'sim-field-head' }, [h('label', { text: label }), valLbl]),
+      input,
+      sub ? h('div', { class: 'sim-hint', text: sub }) : null,
+    ]);
+  }
+  function simChoice(label, key, opts, sub) {
+    var row = h('div', { class: 'chip-row' });
+    opts.forEach(function (o) {
+      row.appendChild(h('button', { class: 'chip' + (S.sim_params[key] === o.v ? ' on' : ''), text: o.l, onClick: function () { S.sim_params[key] = o.v; render(); } }));
+    });
+    return h('div', { class: 'sim-field' }, [h('div', { class: 'sim-field-head' }, [h('label', { text: label })]), row, sub ? h('div', { class: 'sim-hint', text: sub }) : null]);
+  }
+  function buildSimParamPanel(P, onChange) {
+    var panel = h('div', { class: 'card sim-params' });
+    panel.appendChild(cardHead('simulation', 'var(--kmu)', '시나리오 파라미터', '설계 8장 · 변경 즉시 재계산'));
+    var body = h('div', { class: 'sim-params-body' });
+
+    body.appendChild(simRange('감축률 r', 'r', 0, 0.5, 0.01, function (x) { return F.pct(x, 0); }, onChange, '목표 입학정원 감축률 (0~50%)'));
+    body.appendChild(simRange('감축 시작연도 t0', 't0', 2025, 2035, 1, function (x) { return String(x); }, onChange));
+    body.appendChild(simRange('투영 기간', 'horizon', 5, 15, 1, function (x) { return x + '년'; }, onChange));
+    body.appendChild(simChoice('감축 프로파일', 'profile', [{ v: 'immediate', l: '즉시' }, { v: 'linear', l: '선형 램프' }]));
+    if (P.profile === 'linear') body.appendChild(simRange('램프 도달 연차', 'rampYears', 2, 10, 1, function (x) { return x + '년'; }, onChange));
+
+    body.appendChild(h('div', { class: 'sim-sep' }));
+    body.appendChild(simChoice('충원율 모드', 'fillMode', [{ v: 'realistic', l: '현실(수요앵커)' }, { v: 'conservative', l: '보수(비례감소)' }], '미충원 학교 손실 비대칭(설계 3장)'));
+    if (P.fillMode === 'realistic') body.appendChild(simRange('충원 회복계수 β', 'beta', 0, 1, 0.05, function (x) { return x.toFixed(2); }, onChange, '0=고정 · 1=완전회복'));
+
+    body.appendChild(h('div', { class: 'sim-sep' }));
+    body.appendChild(simChoice('단가 상승 π', 'piMode', [{ v: 'freeze', l: '동결' }, { v: 'cap', l: '법정상한' }, { v: 'half', l: '상한½' }, { v: 'custom', l: '사용자' }], '등록금 인상 시나리오(설계 4.2)'));
+    if (P.piMode === 'custom') body.appendChild(simRange('연 인상률', 'piRate', 0, 0.06, 0.005, function (x) { return F.pct(x, 1); }, onChange));
+
+    body.appendChild(h('div', { class: 'sim-sep' }));
+    body.appendChild(simRange('지출 연동 γ', 'gamma', 0, 1, 0.05, function (x) { return x.toFixed(2); }, onChange, '0=완전경직(수지 최악) · 1=완전연동'));
+    body.appendChild(simRange('수강료 탄력 η(5120)', 'eta5120', 0, 0.5, 0.05, function (x) { return x.toFixed(2); }, onChange));
+    body.appendChild(simRange('이탈률 스트레스', 'dropout', 0, 0.1, 0.01, function (x) { return F.pct(x, 0); }, onChange, '중도탈락 가중(설계 2.3)'));
+
+    body.appendChild(h('div', { class: 'sim-sep' }));
+    var lambdaOn = P.lambda > 0;
+    var lamHead = h('div', { class: 'sim-field-head' }, [
+      h('label', { text: '충원율 인구 드리프트 λ' }),
+      h('button', { class: 'chip mini' + (lambdaOn ? ' on' : ''), text: lambdaOn ? 'ON' : 'OFF', onClick: function () { S.sim_params.lambda = lambdaOn ? 0 : 0.5; render(); } }),
+    ]);
+    var lamField = h('div', { class: 'sim-field' }, [lamHead]);
+    if (lambdaOn) {
+      var li = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: P.lambda, class: 'sim-slider' });
+      var lv = h('span', { class: 'sim-val', text: P.lambda.toFixed(2) });
+      li.addEventListener('input', function () { var x = parseFloat(this.value); S.sim_params.lambda = x; lv.textContent = x.toFixed(2); onChange(); });
+      lamHead.appendChild(lv); lamField.appendChild(li);
+    }
+    lamField.appendChild(h('div', { class: 'sim-hint', text: '시도 18세 감소의 충원율 전가율(미충원 학교만 실효 · 기본 OFF)' }));
+    body.appendChild(lamField);
+
+    panel.appendChild(body);
+    return panel;
+  }
+
+  // ── 결과 조립 (개별 대학) ──
+  function buildSimResults(box, sid, entry, P) {
+    var opts = simOpts(sid);
+    var proj = ENG.project(entry, P, opts);
+    var scen = ENG.scenarios(entry, P, opts);
+    var years = scen.base.projection.years;
+    var fy = S.sim_focus; if (fy == null || years.indexOf(fy) < 0) fy = years[years.length - 1];
+    var fi = years.indexOf(fy);
+
+    if (!proj.responsive) {
+      box.appendChild(h('div', { class: 'card sim-note' }, [
+        cardHead('simulation', 'var(--warning)', '학부 반응 세그먼트 없음', schools[sid].n + '은(는) 학부 정원내 수업료가 없어 정원 감축 델타=0'),
+        h('p', { class: 'hint', text: '대학원대학 등은 학부 정원 감축 레버에 반응하지 않습니다(설계 1.5·2.5).' }),
+      ]));
+    }
+    box.appendChild(simFanCard(sid, scen, years));
+    box.appendChild(simOpBalCard(sid, scen, years));
+    box.appendChild(simKpiCard(scen, years, fy, fi));
+    box.appendChild(simLaborCard(sid, entry, P, years, fi, opts));
+    box.appendChild(simSegmentCard(entry, proj));
+    box.appendChild(simAccuracyCard(sid, entry));
+  }
+
+  function simScenarioLegend(col) {
+    return h('div', { class: 'legend' }, [
+      h('span', { class: 'lg', html: '<i style="background:var(--good)"></i>낙관(손실 최소)' }),
+      h('span', { class: 'lg', html: '<i style="background:' + C.resolveColor(col) + '"></i>기준' }),
+      h('span', { class: 'lg', html: '<i style="background:var(--critical)"></i>비관(손실 최대)' }),
+      h('span', { class: 'lg', html: '<i class="dash" style="color:var(--muted)"></i>무정책 기준' }),
+    ]);
+  }
+
+  // 등록금수입(5110) 팬차트 — 3종 시나리오 + 잔차 밴드 + 무정책 기준선
+  function simFanCard(sid, scen, years) {
+    var col = schoolColor(sid);
+    var optR = scen.optimistic.projection.rows, basR = scen.base.projection.rows, pesR = scen.pessimistic.projection.rows;
+    var noPolicy = years.map(function (y, i) { return [y, basR[i].base5110]; });
+    var optPts = years.map(function (y, i) { return [y, optR[i].lvl5110]; });
+    var basPts = years.map(function (y, i) { return [y, basR[i].lvl5110]; });
+    var pesPts = years.map(function (y, i) { return [y, pesR[i].lvl5110]; });
+    // 백테스트 잔차 밴드(기준 시나리오, 학교 bt)
+    var rb = ENG.residualBand(basR.map(function (r) { return r.lvl5110; }), simEntry(sid).bt, { field: 'mape_rev' });
+    var band = null, bandNote;
+    if (!rb.omitted) {
+      band = { lo: years.map(function (y, i) { return [y, rb.lo[i]]; }), hi: years.map(function (y, i) { return [y, rb.hi[i]]; }), color: col };
+      bandNote = ' · 잔차밴드 ±' + (rb.z * rb.sigma_rel * 100).toFixed(1) + '%(P10~P90)';
+    } else {
+      bandNote = ' · 잔차밴드 생략(백테스트 미검증 학교)';
+    }
+    var card = h('div', { class: 'card' }, [
+      cardHead('cap', col, '등록금수입(5110) 시나리오 팬차트', '무정책 기준선 대비 낙관·기준·비관 3종' + bandNote),
+    ]);
+    var b = chartBox(320); card.appendChild(b);
+    card.appendChild(simScenarioLegend(col));
+    C.line(b, {
+      height: 320, band: band, xTicks: years, yFmt: F.krwAxis, tipFmt: F.krw,
+      series: [
+        { name: '무정책 기준', color: 'var(--muted)', points: noPolicy, dashed: true, dim: true },
+        { name: '낙관(손실 최소)', color: 'var(--good)', points: optPts },
+        { name: '기준', color: col, points: basPts, emphasize: true, label: '기준' },
+        { name: '비관(손실 최대)', color: 'var(--critical)', points: pesPts },
+      ],
+    });
+    return card;
+  }
+
+  // 운영수지 추이 — 3종 시나리오 레벨 + 무정책 기준
+  function simOpBalCard(sid, scen, years) {
+    var col = schoolColor(sid);
+    var optPts = years.map(function (y, i) { return [y, scen.optimistic.kpis[i].primed['운영수지']]; });
+    var basPts = years.map(function (y, i) { return [y, scen.base.kpis[i].primed['운영수지']]; });
+    var pesPts = years.map(function (y, i) { return [y, scen.pessimistic.kpis[i].primed['운영수지']]; });
+    var orig = scen.base.kpis.length ? scen.base.kpis[0].original['운영수지'] : null;
+    var origPts = years.map(function (y) { return [y, orig]; });
+    var card = h('div', { class: 'card' }, [cardHead('scale', 'var(--series-2)', '운영수지 추이', '운영수입 − 운영지출 · 3종 시나리오 · 0선 = 흑자/적자 경계')]);
+    var b = chartBox(300); card.appendChild(b);
+    card.appendChild(simScenarioLegend(col));
+    C.line(b, {
+      height: 300, yZero: true, xTicks: years, yFmt: F.krwAxis, tipFmt: F.krw,
+      series: [
+        { name: '무정책 기준', color: 'var(--muted)', points: origPts, dashed: true, dim: true },
+        { name: '낙관', color: 'var(--good)', points: optPts },
+        { name: '기준', color: col, points: basPts, emphasize: true, label: '기준' },
+        { name: '비관', color: 'var(--critical)', points: pesPts },
+      ],
+    });
+    return card;
+  }
+
+  // KPI 델타 카드 (기준 시나리오 · 포커스 연도)
+  function simKpiCard(scen, years, fy, fi) {
+    var card = h('div', { class: 'card' });
+    card.appendChild(cardHead('overview', 'var(--series-4)', '파급 KPI 델타 (기준 시나리오)', fy + '년 · 원값 → 시뮬값'));
+    var chips = h('div', { class: 'chip-row yearchips' });
+    years.forEach(function (y) {
+      chips.appendChild(h('button', { class: 'chip yearchip' + (y === fy ? ' on' : ''), text: String(y), onClick: function () { S.sim_focus = y; render(); } }));
+    });
+    card.appendChild(chips);
+    var kb = scen.base.kpis[fi];
+    var grid = h('div', { class: 'sim-kpi-grid' });
+    SIM_KPI_CARDS.forEach(function (name) {
+      var meta = KPI_META[name]; if (!meta) return;
+      var o = kb.original[name], p = kb.primed[name], d = kb.delta[name];
+      if (o == null && p == null) return;
+      var neu = d == null || Math.abs(d) < 1e-9;
+      var dir = neu ? 'neu' : (((d > 0) === (meta.higher !== false)) ? 'good' : 'bad');
+      var arrow = neu ? '→' : (d > 0 ? '▲' : '▼');
+      grid.appendChild(h('div', { class: 'sim-kpi ' + dir }, [
+        h('div', { class: 'sk-name', text: meta.label }),
+        h('div', { class: 'sk-flow' }, [
+          h('span', { class: 'sk-orig', text: F.byFmt(o, meta.fmt) }),
+          h('span', { class: 'sk-arr', text: '→' }),
+          h('span', { class: 'sk-new', text: F.byFmt(p, meta.fmt) }),
+        ]),
+        h('div', { class: 'sk-delta ' + dir }, [h('span', { class: 'sk-arrico', text: arrow }), h('span', { text: F.delta(d, meta.fmt) })]),
+      ]));
+    });
+    card.appendChild(grid);
+    return card;
+  }
+
+  // 인건비부담률 증폭 (설계 5.3): 운영수지 ε_L=0(경직) vs ε_L=0.3(조정)
+  function simLaborCard(sid, entry, P, years, fi, opts) {
+    var baseP = baseScenarioParams(P);
+    function opBal(gL) {
+      var p = {}; for (var k in baseP) p[k] = baseP[k]; p.gammaLabor = gL;
+      var pr = ENG.project(entry, p, opts); var ks = ENG.recalcSeries(entry, pr, p, opts);
+      return { pts: years.map(function (y, i) { return [y, ks[i].primed['운영수지']]; }), ks: ks };
+    }
+    var rigid = opBal(0), flex = opBal(0.3);
+    var fy = years[fi];
+    var kb = rigid.ks[fi];
+    var o = kb.original['인건비부담률'], p = kb.primed['인건비부담률'];
+    var jump = (o != null && p != null) ? (p - o) : null;
+    var card = h('div', { class: 'card sim-labor' });
+    card.appendChild(cardHead('users', 'var(--series-5)', '인건비부담률 증폭 (설계 5.3)', '수입 분모 축소 + 인건비 경직 → 비선형 급등'));
+    card.appendChild(h('div', { class: 'sim-amp' }, [
+      h('div', { class: 'amp-lab', text: '인건비부담률 · ' + fy + '년 · 인건비 완전경직(ε_L=0)' }),
+      h('div', { class: 'amp-flow' }, [
+        h('span', { class: 'amp-orig', text: F.pct(o) }),
+        h('span', { class: 'amp-arr', text: '→' }),
+        h('span', { class: 'amp-new' + (jump > 0 ? ' up' : '') , text: F.pct(p) }),
+        jump != null ? h('span', { class: 'amp-jump' + (jump > 0 ? ' up' : '') , text: F.pctPoint(jump) }) : null,
+      ]),
+    ]));
+    var b = chartBox(250); card.appendChild(b);
+    card.appendChild(h('div', { class: 'legend' }, [
+      h('span', { class: 'lg', html: '<i style="background:var(--critical)"></i>인건비 경직 ε_L=0 (최악)' }),
+      h('span', { class: 'lg', html: '<i style="background:var(--series-2)"></i>인건비 조정 ε_L=0.3' }),
+    ]));
+    C.line(b, {
+      height: 250, yZero: true, xTicks: years, yFmt: F.krwAxis, tipFmt: F.krw,
+      series: [
+        { name: 'ε_L=0 경직', color: 'var(--critical)', points: rigid.pts, emphasize: true },
+        { name: 'ε_L=0.3 조정', color: 'var(--series-2)', points: flex.pts },
+      ],
+    });
+    return card;
+  }
+
+  // 세그먼트 분해 φ_in/out/grad + 반응 가능 수입
+  function simSegmentCard(entry, proj) {
+    var base = entry.base || {};
+    var c5112 = base.c5112 || 0;
+    var pin = proj.meta.phi_in, pout = proj.meta.phi_out, pgr = proj.meta.phi_grad;
+    var respRev = (pin != null) ? pin * c5112 : null;
+    var rho = (entry.price && entry.price.rho_g) || 1.4;
+    var card = h('div', { class: 'card' });
+    card.appendChild(cardHead('data', 'var(--series-1)', '세그먼트 분해 — 반응 가능 수입', '수업료(5112)를 학부정원내·정원외·대학원으로 분해(ρ_g=' + rho + ' 가정)'));
+    var b = chartBox(110); card.appendChild(b);
+    C.bar(b, {
+      height: 110, stacked: true, labelW: 92, valFmt: F.krw,
+      items: [{ label: '수업료 5112', segs: [
+        { name: '학부 정원내(반응)', value: (pin || 0) * c5112, color: 'var(--series-1)' },
+        { name: '학부 정원외', value: (pout || 0) * c5112, color: 'var(--series-3)' },
+        { name: '대학원', value: (pgr || 0) * c5112, color: 'var(--series-4)' },
+      ] }],
+    });
+    card.appendChild(h('div', { class: 'sim-seg-call' }, [
+      h('div', { class: 'ssc-big', text: F.pct(pin) }),
+      h('div', { class: 'ssc-txt', html: '정원 감축에 <b>반응하는 수입 비중(φ_in)</b> · 반응 가능 등록금수입 ≈ <b>' + F.krw(respRev) + '</b>' }),
+    ]));
+    card.appendChild(h('p', { class: 'hint', text: '나머지(정원외·대학원·입학금·수강료)는 정원 감축과 무관하게 기준 경로 고정(설계 1.5·9장).' }));
+    return card;
+  }
+
+  function simBtStat(l, val) { return h('div', { class: 'ssb-stat' }, [h('div', { class: 'ssb-v', text: val }), h('div', { class: 'ssb-l', text: l })]); }
+
+  // 정확도 · 한계 패널 (정직 노출)
+  function simAccuracyCard(sid, entry) {
+    var card = h('div', { class: 'card sim-acc' });
+    card.appendChild(cardHead('shield', 'var(--series-6)', '정확도 · 한계 (정직 노출)', '백테스트 게이트 결과를 숨기지 않고 그대로 표기'));
+    var type = schools[sid].type;
+    if (SIM_NOBT_TYPE[type]) {
+      card.appendChild(h('div', { class: 'sim-warn-badge', html: '⚠ ' + type + ' — 백테스트 불가(자금계산서 종단 부재). 대학 백테스트 결과의 <b>외삽</b>으로만 정확도 간주(설계 9장 · D2 §5).' }));
+    }
+    var tbl = h('table', { class: 'data sim-bt-tbl' });
+    tbl.appendChild(h('thead', {}, [h('tr', {}, [h('th', { text: '검증 층' }), h('th', { text: '결과(2021~24 · 수입가중)' }), h('th', { text: '목표' }), h('th', { text: '판정' })])]));
+    var tb = h('tbody');
+    SIM_BT_AGG.forEach(function (r) {
+      tb.appendChild(h('tr', {}, [
+        h('td', { text: r.k }), h('td', { text: r.v }), h('td', { text: r.tgt }),
+        h('td', {}, [h('span', { class: 'bt-verdict ' + (r.pass ? 'pass' : 'fail'), text: r.pass ? '통과' : '미달' })]),
+      ]));
+    });
+    tbl.appendChild(tb);
+    card.appendChild(h('div', { class: 'tbl-wrap' }, [tbl]));
+    card.appendChild(h('p', { class: 'hint', text: 'L1(재학 전개)만 3% 엄격기준을 0.64%p 미달 — 데이터 한계(학년축 부재)에 기인한 재학층 산포. 계통편향은 제거(MPE 0.42%)됐고 정책 델타의 종착 지표(수입 5110/5100)는 전 기준 합격.' }));
+
+    if (entry.bt) {
+      var bt = entry.bt;
+      card.appendChild(h('div', { class: 'sim-schoolbt' }, [
+        h('div', { class: 'ssb-title', text: schools[sid].n + ' 개별 백테스트' }),
+        h('div', { class: 'ssb-grid' }, [
+          simBtStat('재학 MAPE', F.pct(bt.mape_enroll)),
+          simBtStat('수입 MAPE', F.pct(bt.mape_rev)),
+          simBtStat('편향 MPE', F.pctPoint(bt.mpe)),
+          simBtStat('skill', bt.skill != null ? bt.skill.toFixed(3) : '—'),
+        ]),
+      ]));
+    } else if (!SIM_NOBT_TYPE[type]) {
+      card.appendChild(h('p', { class: 'hint', text: schools[sid].n + '은(는) 백테스트 코호트 밖(폴백·종단 결측) — 개별 정확도 미검증, 대학 집계로 갈음.' }));
+    }
+
+    card.appendChild(h('div', { class: 'sim-limit-head', text: '모델 한계 (설계 9장)' }));
+    var ul = h('ul', { class: 'sim-limits' });
+    SIM_LIMITS.forEach(function (t) { ul.appendChild(h('li', { text: t })); });
+    card.appendChild(ul);
+    return card;
+  }
+
+  // ── C5: 코호트 집계 모드 (반응 학교 시나리오 레벨 합) ──
+  function buildSimAggregate(box, P) {
+    var pop = filteredSchoolIds().filter(function (sid) { return simEntry(sid); });
+    var years = null, n = 0, respN = 0;
+    var sOpt, sBas, sPes, sBase, oOpt, oBas, oPes, oOrig;
+    pop.forEach(function (sid) {
+      var e = simEntry(sid);
+      var sc = ENG.scenarios(e, P, simOpts(sid));
+      var yy = sc.base.projection.years;
+      if (!years) {
+        years = yy;
+        sOpt = []; sBas = []; sPes = []; sBase = []; oOpt = []; oBas = []; oPes = []; oOrig = [];
+        yy.forEach(function () { sOpt.push(0); sBas.push(0); sPes.push(0); sBase.push(0); oOpt.push(0); oBas.push(0); oPes.push(0); oOrig.push(0); });
+      }
+      if (sc.base.projection.responsive) respN++;
+      n++;
+      yy.forEach(function (y, i) {
+        sOpt[i] += sc.optimistic.projection.rows[i].lvl5100;
+        sBas[i] += sc.base.projection.rows[i].lvl5100;
+        sPes[i] += sc.pessimistic.projection.rows[i].lvl5100;
+        sBase[i] += sc.base.projection.rows[i].base5100;
+        oOpt[i] += sc.optimistic.kpis[i].primed['운영수지'] || 0;
+        oBas[i] += sc.base.kpis[i].primed['운영수지'] || 0;
+        oPes[i] += sc.pessimistic.kpis[i].primed['운영수지'] || 0;
+        oOrig[i] += sc.base.kpis[i].original['운영수지'] || 0;
+      });
+    });
+    if (!years) { box.appendChild(h('div', { class: 'card' }, [h('p', { class: 'hint', text: '집계 대상 학교가 없습니다.' })])); return; }
+    var col = 'var(--kmu)';
+    function fanCard(title, sub, ic, iccol, opt, bas, pes, base, zero) {
+      var c = h('div', { class: 'card' }, [cardHead(ic, iccol, title, sub)]);
+      var b = chartBox(300); c.appendChild(b); c.appendChild(simScenarioLegend(col));
+      C.line(b, {
+        height: 300, yZero: !!zero, xTicks: years, yFmt: F.krwAxis, tipFmt: F.krw,
+        series: [
+          { name: '무정책 기준', color: 'var(--muted)', points: years.map(function (y, i) { return [y, base[i]]; }), dashed: true, dim: true },
+          { name: '낙관', color: 'var(--good)', points: years.map(function (y, i) { return [y, opt[i]]; }) },
+          { name: '기준', color: col, points: years.map(function (y, i) { return [y, bas[i]]; }), emphasize: true, label: '기준' },
+          { name: '비관', color: 'var(--critical)', points: years.map(function (y, i) { return [y, pes[i]]; }) },
+        ],
+      });
+      return c;
+    }
+    box.appendChild(fanCard('코호트 등록금수입(5100) 합계 — ' + n + '개교(' + respN + '개 반응)', '현재 필터 모집단 · 3종 시나리오 레벨 합', 'data', col, sOpt, sBas, sPes, sBase, false));
+    box.appendChild(fanCard('코호트 운영수지 합계', '3종 시나리오 · 0선 = 흑자/적자 경계', 'scale', 'var(--series-2)', oOpt, oBas, oPes, oOrig, true));
+    box.appendChild(h('div', { class: 'card sim-acc' }, [
+      cardHead('shield', 'var(--series-6)', '집계 모드 주의', '개별 KPI·세그먼트·백테스트는 대학 선택 모드에서 확인'),
+      h('p', { class: 'hint', text: '집계는 반응 세그먼트 보유 학교의 시나리오 레벨 합입니다. 백테스트는 대학 145교 기준(전문대·사이버·대학원대 종단 부재로 검증 불가, 설계 9장·D2 §5).' }),
+    ]));
+  }
+
+  // ═══════════════════════════════════════════════════════
   //  탭 5 — 데이터·검증
   // ═══════════════════════════════════════════════════════
   function renderData(v) {
@@ -2144,7 +2593,7 @@
       EXT.population && EXT.population.age18_21.length === EXT.population.sidos.length && EXT.region_outlook.length > 0);
 
     // 3) 각 탭 렌더 후 SVG 노드 > 0 (위기 진단·구조 전망 포함)
-    ['overview', 'structure', 'timeseries', 'compare', 'crisis', 'outlook', 'data'].forEach(function (t) {
+    ['overview', 'structure', 'timeseries', 'compare', 'crisis', 'outlook', 'simulation', 'data'].forEach(function (t) {
       S.tab = t; render();
       var n = document.querySelectorAll('#view svg').length;
       check('탭 ' + t + ' SVG 렌더(' + n + ')', t === 'data' ? true : n > 0);
@@ -2169,7 +2618,7 @@
     var firstCard = homeCards[0];
     if (firstCard) firstCard.click();               // 첫 카드(개요) → overview 탭 전환
     check('홈 랜딩 렌더 + 메뉴 카드 내비게이션',
-      heroOk && homeCards.length === 8 && !!firstCard && S.tab === 'overview' &&
+      heroOk && homeCards.length === 9 && !!firstCard && S.tab === 'overview' &&
       document.querySelectorAll('#view svg').length > 0);
 
     // 7) F.eok 억원 포맷 단위 테스트 (천원 → "1,234.5억원")
@@ -2194,6 +2643,22 @@
     var panelTops = [].map.call(document.querySelectorAll('#t2-panel .bench-row .meter-val'), function (e) { return topPct(e.textContent); });
     check('매트릭스 벤치마크 백분위 == 수지구조 패널 백분위',
       matTops.length === 3 && panelTops.length === 3 && matTops.every(function (t, i) { return t != null && t === panelTops[i]; }));
+
+    // 11) 시뮬레이션 — r=0 델타 0 · r=10% 인건비부담률 상승 · 탭 렌더
+    if (HAS_SIM) {
+      var se = simEntry(KMU_ID), so = simOpts(KMU_ID);
+      var sp0 = ENG.project(se, { r: 0, t0: 2025 }, so);
+      var maxD0 = Math.max.apply(null, sp0.rows.map(function (r) { return Math.abs(r.d5100); }));
+      check('시뮬 r=0 델타 0', maxD0 === 0);
+      var ssc = ENG.scenarios(se, { r: 0.1, t0: 2025 }, so);
+      var lastK = ssc.base.kpis[ssc.base.kpis.length - 1];
+      check('시뮬 r=10% 인건비부담률 상승', lastK.delta['인건비부담률'] > 0);
+      S.tab = 'simulation'; S.sim_school = KMU_ID; S.sim_mode = 'single';
+      S.sim_params = defaultSimParams(); S.sim_params.r = 0.1; S.sim_focus = null; render();
+      check('시뮬 탭 SVG 렌더 + 정확도 표', document.querySelectorAll('#view svg').length > 0 &&
+        document.querySelectorAll('#view .sim-bt-tbl tbody tr').length > 0);
+      S.sim_params = defaultSimParams();
+    }
 
     S.t2_year = Y_LAST; S.tab = 'overview'; render();
 

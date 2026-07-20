@@ -902,6 +902,91 @@ table.acc-matrix tr.acc-hl td:first-child { box-shadow: inset 3px 0 0 var(--kmu)
 .cv-badge.volatile { background: var(--warn-soft); color: var(--serious); }
 table.acc-matrix .muted-dash { color: var(--muted); }
 
+/* ═══════════════════════════════════════════════════════
+   입학정원 감소 시뮬레이션 탭
+   ═══════════════════════════════════════════════════════ */
+.sim-top { align-items: flex-end; }
+.sim-top .sim-beta { margin-left: auto; }
+.chip.mini { padding: 2px 9px; font-size: 0.68rem; }
+
+.sim-grid { display: grid; grid-template-columns: 316px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .sim-grid { grid-template-columns: 1fr; } }
+
+/* 파라미터 패널 */
+.sim-params { position: sticky; top: 12px; }
+.sim-params-body { display: flex; flex-direction: column; gap: 13px; margin-top: 12px; }
+.sim-field { display: flex; flex-direction: column; gap: 6px; }
+.sim-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sim-field-head label { font-size: 0.78rem; font-weight: 640; color: var(--text-secondary); }
+.sim-val { font-size: 0.8rem; font-weight: 720; color: var(--kmu); font-variant-numeric: tabular-nums; }
+.sim-slider { width: 100%; accent-color: var(--kmu); cursor: pointer; }
+.sim-hint { font-size: 0.68rem; color: var(--muted); line-height: 1.4; }
+.sim-sep { height: 1px; background: var(--border); margin: 3px 0; }
+
+/* 결과 컬럼 */
+.sim-results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.sim-results .card { margin: 0; }
+.sim-note { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); }
+
+/* KPI 델타 카드 그리드 */
+.sim-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 12px; }
+.sim-kpi {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 11px 12px; background: var(--surface-1); display: flex; flex-direction: column; gap: 6px;
+}
+.sim-kpi .sk-name { font-size: 0.76rem; color: var(--text-secondary); font-weight: 640; }
+.sim-kpi .sk-flow { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.sim-kpi .sk-orig { color: var(--muted); font-size: 0.86rem; }
+.sim-kpi .sk-arr { color: var(--muted); }
+.sim-kpi .sk-new { font-size: 1.02rem; font-weight: 760; color: var(--text-primary); }
+.sim-kpi .sk-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; font-weight: 720; font-variant-numeric: tabular-nums; }
+.sim-kpi .sk-delta .sk-arrico { font-size: 0.7rem; }
+.sim-kpi.good .sk-delta { color: var(--good); }
+.sim-kpi.bad .sk-delta { color: var(--critical); }
+.sim-kpi.neu .sk-delta { color: var(--muted); }
+.sim-kpi.good { border-left: 3px solid var(--good); }
+.sim-kpi.bad { border-left: 3px solid var(--critical); }
+
+/* 인건비 증폭 카드 */
+.sim-amp { margin-top: 10px; }
+.sim-amp .amp-lab { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; }
+.sim-amp .amp-flow { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.sim-amp .amp-orig { font-size: 1.05rem; color: var(--muted); font-weight: 640; }
+.sim-amp .amp-arr { color: var(--muted); }
+.sim-amp .amp-new { font-size: 1.5rem; font-weight: 780; color: var(--text-primary); }
+.sim-amp .amp-new.up { color: var(--critical); }
+.sim-amp .amp-jump { font-size: 0.82rem; font-weight: 720; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-secondary); }
+.sim-amp .amp-jump.up { background: var(--bad-soft); color: var(--critical); }
+
+/* 세그먼트 분해 콜아웃 */
+.sim-seg-call { display: flex; align-items: center; gap: 14px; margin-top: 10px; padding: 11px 13px; background: var(--surface-2); border-radius: var(--radius-sm); }
+.sim-seg-call .ssc-big { font-size: 1.7rem; font-weight: 800; color: var(--series-1); font-variant-numeric: tabular-nums; line-height: 1; }
+.sim-seg-call .ssc-txt { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; }
+.sim-seg-call .ssc-txt b { color: var(--text-primary); font-weight: 720; }
+
+/* 정확도 · 한계 패널 */
+.sim-warn-badge {
+  display: block; font-size: 0.78rem; line-height: 1.5; padding: 9px 12px; margin: 10px 0;
+  background: var(--warn-soft); color: var(--serious); border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--serious) 30%, transparent);
+}
+.sim-warn-badge b { color: var(--serious); font-weight: 760; }
+.sim-bt-tbl { width: 100%; margin-top: 10px; }
+.sim-bt-tbl th, .sim-bt-tbl td { padding: 7px 9px; font-size: 0.8rem; }
+.bt-verdict { display: inline-block; font-size: 0.72rem; font-weight: 720; padding: 2px 9px; border-radius: 999px; }
+.bt-verdict.pass { background: var(--good-soft); color: var(--good); }
+.bt-verdict.fail { background: var(--bad-soft); color: var(--critical); }
+.sim-schoolbt { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.sim-schoolbt .ssb-title { font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+.ssb-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
+.ssb-stat { text-align: center; padding: 8px 6px; background: var(--surface-2); border-radius: var(--radius-xs); }
+.ssb-stat .ssb-v { font-size: 1.02rem; font-weight: 760; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.ssb-stat .ssb-l { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+.sim-limit-head { font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin: 14px 0 6px; }
+.sim-limits { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.sim-limits li { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.5; }
+@media (max-width: 560px) { .ssb-grid { grid-template-columns: repeat(2, 1fr); } }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

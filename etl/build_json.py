@@ -23,9 +23,16 @@ from datetime import datetime, timezone
 import config
 import ext_data
 import metrics
+import sim_params
+import pop_correction
 
 # 희소 인코딩 임계(비결측률)
 SPARSE_THRESHOLD = 0.10
+
+# sim φ합 무결성 허용오차. 설계·task는 =1(±1e-6)이나 sim.bySchool의 φ는 A3에서
+# 4자리 반올림 저장(_r)돼 세 값의 합이 최대 ±1.5e-4까지 벗어난다(실측 max 1e-4).
+# 반올림값에서 1e-6은 표현 불가하므로 A3 validate_sim의 기존 관례(1e-3)와 정합.
+SIM_PHI_TOL = 1e-3
 
 
 def _load_tidy():
@@ -356,6 +363,111 @@ def _assert_ext_integrity(doc):
         assert len(ct[key]) == len(ct["offsets"]), f"closure_traj.{key} 길이 불일치"
 
 
+def _build_sim(full_doc):
+    """sim 블록(설계 10.2) 조립. full_doc 기준(base 스칼라 5111/5112 등 lv3 필요).
+
+    - bySchool·meta.group_fallback·counts 등은 sim_params.compute_sim_params(doc 주입).
+    - meta.pop_corr/pop18_decline은 pop_correction 모듈에서 직접 산출(단일 소스, 중복 구현 금지):
+        pop_corr      = c_sido()              시도별 추계 편향 보정계수(3.4)
+        pop18_decline = drift_cumulative()    d_sido(t)=pop(t)/pop(t0)-1, f0 드리프트 입력(3.3)
+    - bt 는 build/interim/backtest.json 존재 시 채우고 없으면 null(D1 병렬 — 파일 유무로 분기).
+    """
+    sim = sim_params.compute_sim_params(doc=full_doc)
+    sim["meta"]["pop_corr"] = {
+        s: round(c, 4) for s, c in pop_correction.c_sido().items()
+    }
+    sim["meta"]["pop18_decline"] = {
+        s: {str(y): round(d, 6) for y, d in ser.items()}
+        for s, ser in pop_correction.drift_cumulative().items()
+    }
+    _attach_backtest(sim)
+    return sim
+
+
+def _attach_backtest(sim):
+    """build/interim/backtest.json 있으면 bySchool[idx].bt 채움. 없으면 무변경(전부 null)."""
+    path = config.INTERIM_DIR / "backtest.json"
+    if not path.exists():
+        return 0
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    # 허용 형태: {"bySchool":{idx: bt}} 또는 flat {idx: bt}
+    if isinstance(data, dict) and isinstance(data.get("bySchool"), dict):
+        bt_map = data["bySchool"]
+    elif isinstance(data, dict):
+        bt_map = data
+    else:
+        return 0
+    n = 0
+    for idx, e in sim["bySchool"].items():
+        bt = bt_map.get(idx)
+        if bt is not None:
+            e["bt"] = bt
+            n += 1
+    return n
+
+
+def _assert_sim_integrity(doc):
+    """sim 블록 무결성 자동검증 — 실패 시 AssertionError."""
+    sim = doc["sim"]
+    meta, bs = sim["meta"], sim["bySchool"]
+    nschools = len(doc["schools"])
+
+    # 1) bySchool 커버리지 = schools 길이(전 idx 존재)
+    assert len(bs) == nschools, f"sim.bySchool {len(bs)}≠schools {nschools}"
+    for i in range(nschools):
+        assert str(i) in bs, f"sim.bySchool idx {i} 누락"
+
+    # 2) meta 필수 키
+    for k in ("rho_g_default", "unit_price", "price_cap", "pop_corr",
+              "pop18_decline", "group_fallback", "defaults", "counts", "notes"):
+        assert k in meta, f"sim.meta.{k} 누락"
+
+    # 3) price_cap 연도 커버리지 2016~2026
+    for y in range(2016, 2027):
+        assert str(y) in meta["price_cap"], f"sim.meta.price_cap {y} 누락"
+
+    # 4) 학교별
+    for idx, e in bs.items():
+        status = (e.get("flags") or {}).get("status")
+
+        # base 스칼라 존재(필수 키)
+        base = e.get("base")
+        assert isinstance(base, dict), f"sim[{idx}].base 없음"
+        for k in ("c5111", "c5112", "c5120", "c5100", "c5210",
+                  "cOP_IN", "cT_IN", "c4100", "cOP_EX", "c4321", "c4322",
+                  "edu_cost"):
+            assert k in base, f"sim[{idx}].base.{k} 누락"
+
+        # bt null 계약(null 또는 dict)
+        assert e.get("bt") is None or isinstance(e.get("bt"), dict), \
+            f"sim[{idx}].bt 계약 위반"
+
+        # 비음수: seg·p_ug·phi
+        seg = e.get("seg") or {}
+        for k in ("H_ug", "H_grad", "A_in", "A_out", "H_ug_in", "H_ug_out"):
+            v = seg.get(k)
+            assert v is None or v >= -1e-6, f"sim[{idx}].seg.{k} 음수 {v}"
+        p = (e.get("price") or {}).get("p_ug")
+        assert p is None or p >= -1e-6, f"sim[{idx}].price.p_ug 음수 {p}"
+        phi = e.get("phi") or {}
+        for k in ("in", "out", "grad"):
+            v = phi.get(k)
+            assert v is None or v >= -1e-6, f"sim[{idx}].phi.{k} 음수 {v}"
+
+        # φ합=1 (no_ug 제외; 세 값 모두 존재 시)
+        if status != "no_ug":
+            pv = [phi.get(k) for k in ("in", "out", "grad")]
+            if all(v is not None for v in pv):
+                assert abs(sum(pv) - 1.0) <= SIM_PHI_TOL, \
+                    f"sim[{idx}] φ합 {sum(pv):.6f}≠1"
+
+        # s_k 단조 감쇠(비증가)
+        sk = (e.get("surv") or {}).get("s_k") or []
+        for j in range(len(sk) - 1):
+            assert sk[j] >= sk[j + 1] - 1e-9, f"sim[{idx}].s_k 비단조"
+
+
 def _write(doc, path):
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, separators=(",", ":"))
@@ -407,12 +519,20 @@ def run():
     full = make(False)
     lite = make(True)
 
+    # sim 블록(A6): full doc 기준 계산 → full/lite 동일 적재(ext와 같은 정책).
+    sim = _build_sim(full)
+    full["sim"] = sim
+    lite["sim"] = sim
+
     _assert_integrity(full, accounts)
     _assert_integrity(lite, accounts)
     _assert_full_lite_consistency(full, lite)
     _assert_ext_integrity(full)
     _assert_ext_integrity(lite)
     assert full["ext"] == lite["ext"], "full/lite ext 불일치"
+    _assert_sim_integrity(full)
+    _assert_sim_integrity(lite)
+    assert full["sim"] == lite["sim"], "full/lite sim 불일치"
 
     full_path = config.BUILD_DIR / "dashboard_data.json"
     lite_path = config.BUILD_DIR / "dashboard_data_lite.json"
@@ -443,6 +563,9 @@ def run():
         "lite_path": lite_path,
         "ext_cov": ext_cov,
         "closure_n": ext["closure_traj"]["n"],
+        "sim_counts": sim["meta"]["counts"],
+        "sim_bt_filled": sum(1 for e in sim["bySchool"].values()
+                             if e.get("bt") is not None),
     }
 
 
