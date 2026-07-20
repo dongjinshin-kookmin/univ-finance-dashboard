@@ -4,3 +4,5 @@ build/
 metadata/raw/
 # macOS
 .DS_Store
+# 에이전트 worktree
+.claude/
