@@ -851,28 +851,42 @@
   // ═══════════════════════════════════════════════════════
   //  탭 1 — 개요
   // ═══════════════════════════════════════════════════════
+  // ── 전역 기준군(전국/수도권/경쟁) 공용 라벨·토글 ─────────────
+  var BENCH_LABEL = { national: '전국', metro: '수도권', competitor: '경쟁대학' };
+  var BENCH_SHORT = { national: '전국', metro: '수도권', competitor: '경쟁' };
+  // 기준군 선택 토글 칩(멤버수 배지 포함). onPick(popKey) 호출.
+  function benchToggle(cur, onPick) {
+    var cnt = BENCH.counts();
+    return h('div', { class: 'chip-row' }, ['national', 'metro', 'competitor'].map(function (k) {
+      return h('button', { class: 'chip' + (k === cur ? ' on' : ''), text: BENCH_LABEL[k] + ' (' + cnt[k] + ')',
+        onClick: function () { onPick(k); } });
+    }));
+  }
+  var t1_bench = 'national';   // 개요 KPI 카드 비교 기준군(전국 기본)
+
   function renderOverview(v) {
     var yr = S.y1;
-    // KPI 카드 6
-    v.appendChild(h('div', { class: 'card' }, [
-      cardHead('overview', 'var(--kmu)', '핵심 지표 — 국민대학교 ' + yr + '년',
-        '값 · Δ전년(개선 초록/악화 빨강) · 코호트 백분위 · 미니 추이 · 중앙값 대비 인사이트. 카드 클릭 → 시계열'),
+    // KPI 카드 6 — 상단 기준군 토글로 백분위·인사이트 재계산
+    var glab = BENCH_LABEL[t1_bench];
+    var head = h('div', { class: 'card' }, [
+      cardHead('overview', 'var(--kmu)', '핵심 지표 — ' + MAIN_NAME + ' ' + yr + '년',
+        '값 · Δ전년(개선 초록/악화 빨강) · 기준군 백분위 · 미니 추이 · 중앙값 대비 인사이트. 카드 클릭 → 시계열'),
+    ]);
+    head.appendChild(h('div', { class: 'row-controls', style: 'margin-top:12px' }, [
+      ctrl('비교 기준군', benchToggle(t1_bench, function (k) { t1_bench = k; render(); })),
     ]));
+    v.appendChild(head);
     var grid = h('div', { class: 'grid k6' });
     OVERVIEW_KPIS.forEach(function (name) {
       var meta = KPI_META[name], kc = kpiIcon(name);
-      var cur = kv(name, KMU_ID, yr), prev = kv(name, KMU_ID, yr - 1);
+      var cur = kv(name, MAIN_ID, yr), prev = kv(name, MAIN_ID, yr - 1);
       var delta = (cur != null && prev != null) ? cur - prev : null;
-      var cs = cohortStats(name, yr);
-      var med = cs ? cs.p50 : null;
+      var bs = BENCH.kpiStats(t1_bench, name, yr);
+      var med = bs ? bs.p50 : null;
 
-      // 코호트 백분위 (지표 방향 반영 → "좋은 방향" 기준 상위 비율)
-      var pctile = null;
-      if (cs && cur != null) {
-        var below = cs.all.filter(function (val) { return val < cur; }).length;
-        var raw = cs.all.length > 1 ? below / (cs.all.length - 1) : 1;
-        pctile = meta.higher === false ? 1 - raw : raw;
-      }
+      // 기준군 백분위 (지표 방향 반영 → "좋은 방향" 기준 상위 비율)
+      var rawP = BENCH.kpiPercentile(t1_bench, name, yr, MAIN_ID);
+      var pctile = rawP == null ? null : (meta.higher === false ? 1 - rawP : rawP);
 
       // 델타 필 (방향 = higher 반영)
       var deltaGood = (delta == null || meta.higher == null) ? null : ((delta >= 0) === meta.higher);
@@ -880,14 +894,14 @@
       var arrow = delta == null ? '–' : (delta > 0 ? '▲' : (delta < 0 ? '▼' : '–'));
       var dMag = delta == null ? '—' : (meta.fmt === 'pct' ? Math.abs(delta * 100).toFixed(1) + '%p' : F.krw(Math.abs(delta)));
 
-      // 인사이트 배너 (실데이터: 코호트 중앙값 대비)
-      var insCls = 'neutral', insTxt = '코호트 데이터 부족';
+      // 인사이트 배너 (실데이터: 기준군 중앙값 대비)
+      var insCls = 'neutral', insTxt = glab + ' 데이터 부족';
       if (med != null && cur != null) {
         var hi = cur > med;
         var good = meta.higher == null ? null : (hi === meta.higher);
         var mag = meta.fmt === 'pct' ? Math.abs((cur - med) * 100).toFixed(1) + '%p' : F.krw(Math.abs(cur - med));
         insCls = good == null ? 'neutral' : (good ? 'good' : 'bad');
-        insTxt = '코호트 중앙값보다 ' + mag + ' ' + (hi ? '높습니다' : '낮습니다');
+        insTxt = glab + ' 중앙값보다 ' + mag + ' ' + (hi ? '높습니다' : '낮습니다');
       }
 
       var mini = chartBox(44); mini.className = 'kpi-mini';
@@ -896,7 +910,7 @@
           iconTile('kpi-icon', kc.ic, kc.c),
           h('div', { class: 'kpi-titles' }, [
             h('div', { class: 'kpi-name', text: meta.label }),
-            h('div', { class: 'kpi-sub', text: '국민대 · ' + yr + '년' }),
+            h('div', { class: 'kpi-sub', text: MAIN_NAME + ' · ' + yr + '년' }),
           ]),
         ]),
         h('div', { class: 'kpi-valrow' }, [
@@ -904,7 +918,7 @@
           h('span', { class: 'delta-pill ' + pillCls, html: arrow + ' ' + dMag + ' <span class="dp-vs">vs ' + (yr - 1) + '</span>' }),
         ]),
         h('div', { class: 'meter-row' }, [
-          h('span', { class: 'meter-lab', text: '코호트 백분위' }),
+          h('span', { class: 'meter-lab', text: glab + ' 백분위' }),
           tickMeter(pctile, kc.c),
           h('span', { class: 'meter-val', style: 'color:' + kc.c, text: pctile == null ? '—' : F.percentileLabel(pctile) }),
         ]),
@@ -912,33 +926,32 @@
         h('div', { class: 'insight ' + insCls }, [h('span', { text: insTxt }), h('span', { class: 'in-arrow', text: '→' })]),
       ]);
       grid.appendChild(card);
-      var pts = YEARS.filter(function (y) { return y >= S.y0 && y <= S.y1; }).map(function (y) { return [y, kv(name, KMU_ID, y)]; });
+      var pts = YEARS.filter(function (y) { return y >= S.y0 && y <= S.y1; }).map(function (y) { return [y, kv(name, MAIN_ID, y)]; });
       C.miniBars(mini, { points: pts, color: kc.c, height: 44, fmt: function (x) { return F.byFmt(x, meta.fmt); } });
     });
     // ── 7번째 카드: 재정 완충력 (적립금 지속가능월수) ──
     if (HAS_EXT) {
       var bc = { ic: 'shield', c: 'var(--series-2)' };
       var months = fmtMonths;
-      var curM = exK2('적립금지속월수', KMU_ID, yr), prevM = exK2('적립금지속월수', KMU_ID, yr - 1);
+      var curM = exK2('적립금지속월수', MAIN_ID, yr), prevM = exK2('적립금지속월수', MAIN_ID, yr - 1);
       var dM = (curM != null && prevM != null) ? curM - prevM : null;
-      // 코호트 백분위(월수 많을수록 완충 우위 → higher good)
-      var pop = filteredSchoolIds();
-      var msVals = pop.map(function (sid) { return exK2('적립금지속월수', sid, yr); });
-      var csM = stats(msVals), medM = csM ? csM.p50 : null, pctM = null;
-      if (csM && curM != null) { var belowM = csM.all.filter(function (x) { return x < curM; }).length; pctM = csM.all.length > 1 ? belowM / (csM.all.length - 1) : 1; }
+      // 기준군 백분위(월수 많을수록 완충 우위 → higher good)
+      var monthsFn = function (sid, y) { return exK2('적립금지속월수', sid, y); };
+      var csM = BENCH.cohortStats(t1_bench, monthsFn, yr), medM = csM ? csM.p50 : null;
+      var pctM = BENCH.percentileOf(t1_bench, monthsFn, yr, curM);
       var dGood = dM == null ? null : dM >= 0;
       var pillM = dM == null ? 'flat' : (dGood ? 'up' : 'down');
       var arrM = dM == null ? '–' : (dM > 0 ? '▲' : (dM < 0 ? '▼' : '–'));
       var magM = dM == null ? '—' : Math.abs(dM).toFixed(1) + '개월';
       var insMcls = 'neutral', insM = '운영지출 기준 ' + (curM == null ? '—' : curM.toFixed(1)) + '개월치 적립금 확보';
-      if (medM != null && curM != null) { var hiM = curM > medM; insMcls = hiM ? 'good' : 'bad'; insM = '운영지출 ' + curM.toFixed(1) + '개월분 — 코호트 중앙값(' + medM.toFixed(1) + '개월)보다 ' + Math.abs(curM - medM).toFixed(1) + '개월 ' + (hiM ? '여유' : '부족'); }
+      if (medM != null && curM != null) { var hiM = curM > medM; insMcls = hiM ? 'good' : 'bad'; insM = '운영지출 ' + curM.toFixed(1) + '개월분 — ' + glab + ' 중앙값(' + medM.toFixed(1) + '개월)보다 ' + Math.abs(curM - medM).toFixed(1) + '개월 ' + (hiM ? '여유' : '부족'); }
       var miniM = chartBox(44); miniM.className = 'kpi-mini';
       var cardM = h('div', { class: 'kpi-card card', onClick: function () { S.tab = 'crisis'; render(); } }, [
         h('div', { class: 'kpi-head' }, [
           iconTile('kpi-icon', bc.ic, bc.c),
           h('div', { class: 'kpi-titles' }, [
             h('div', { class: 'kpi-name', text: '재정 완충력' }),
-            h('div', { class: 'kpi-sub', text: '적립금 지속가능월수 · 국민대 · ' + yr + '년' }),
+            h('div', { class: 'kpi-sub', text: '적립금 지속가능월수 · ' + MAIN_NAME + ' · ' + yr + '년' }),
           ]),
         ]),
         h('div', { class: 'kpi-valrow' }, [
@@ -946,7 +959,7 @@
           h('span', { class: 'delta-pill ' + pillM, html: arrM + ' ' + magM + ' <span class="dp-vs">vs ' + (yr - 1) + '</span>' }),
         ]),
         h('div', { class: 'meter-row' }, [
-          h('span', { class: 'meter-lab', text: '코호트 백분위' }),
+          h('span', { class: 'meter-lab', text: glab + ' 백분위' }),
           tickMeter(pctM, bc.c),
           h('span', { class: 'meter-val', style: 'color:' + bc.c, text: pctM == null ? '—' : F.percentileLabel(pctM) }),
         ]),
@@ -954,50 +967,51 @@
         h('div', { class: 'insight ' + insMcls }, [h('span', { text: insM }), h('span', { class: 'in-arrow', text: '→' })]),
       ]);
       grid.appendChild(cardM);
-      var ptsM = YEARS.map(function (y) { return [y, exSer('적립금총액', KMU_ID, y)]; });
+      var ptsM = YEARS.map(function (y) { return [y, exSer('적립금총액', MAIN_ID, y)]; });
       C.miniBars(miniM, { points: ptsM, color: bc.c, height: 44, fmt: F.krw });
     }
     v.appendChild(grid);
     v.appendChild(h('div', { class: 'spacer-v' }));
 
-    // 운영수지 시계열 + 밴드
+    // 운영수지 시계열 + 밴드 (선택 기준군)
     var row2 = h('div', { class: 'grid c2' });
-    var opCard = h('div', { class: 'card' }, [cardHead('timeseries', 'var(--series-2)', '운영수지 추이', '국민대 실선 · 코호트 p25~p75 밴드 · p50 점선(현재 필터 모집단)')]);
+    var opCard = h('div', { class: 'card' }, [cardHead('timeseries', 'var(--series-2)', '운영수지 추이', MAIN_NAME + ' 실선 · ' + glab + ' p25~p75 밴드 · p50 점선')]);
     var opBox = chartBox(280); opCard.appendChild(opBox);
-    opCard.appendChild(bandLegend('운영수지'));
+    opCard.appendChild(bandLegend(glab));
     row2.appendChild(opCard);
 
-    // 등록금의존율 분포
-    var distCard = h('div', { class: 'card' }, [cardHead('compare', 'var(--series-6)', '등록금의존율 분포 — ' + yr + '년', '현재 필터 모집단 히스토그램 · 국민대 위치 표시')]);
+    // 등록금의존율 분포 (선택 기준군)
+    var distCard = h('div', { class: 'card' }, [cardHead('compare', 'var(--series-6)', '등록금의존율 분포 — ' + yr + '년', glab + ' 히스토그램 · ' + MAIN_NAME + ' 위치 표시')]);
     var distBox = chartBox(260); distCard.appendChild(distBox);
     row2.appendChild(distCard);
     v.appendChild(row2);
     v.appendChild(h('div', { class: 'spacer-v' }));
 
     // 부문 스택바
-    var secCard = h('div', { class: 'card' }, [cardHead('structure', 'var(--series-3)', '수입·지출 부문 구성 — 국민대 ' + yr + '년', '운영 · 자산/부채 · 기본금 · 이월')]);
+    var secCard = h('div', { class: 'card' }, [cardHead('structure', 'var(--series-3)', '수입·지출 부문 구성 — ' + MAIN_NAME + ' ' + yr + '년', '운영 · 자산/부채 · 기본금 · 이월')]);
     var secBox = chartBox(150); secCard.appendChild(secBox);
     secCard.appendChild(sectionLegend());
     v.appendChild(secCard);
 
     // 렌더 차트
     drawOpTrend(opBox);
-    var distVals = filteredSchoolIds().map(function (sid) { return kv('등록금의존율_총계', sid, yr); });
-    C.histogram(distBox, { values: distVals, marker: { x: kv('등록금의존율_총계', KMU_ID, yr), label: '국민대' }, xFmt: function (x) { return F.pct(x, 0); }, color: 'var(--band)' });
+    var distVals = BENCH.idsFor(t1_bench).map(function (sid) { return kv('등록금의존율_총계', sid, yr); });
+    C.histogram(distBox, { values: distVals, marker: { x: kv('등록금의존율_총계', MAIN_ID, yr), label: MAIN_NAME }, xFmt: function (x) { return F.pct(x, 0); }, color: 'var(--band)' });
     drawSectionBar(secBox, yr);
   }
 
   function drawOpTrend(box) {
     var yrs = YEARS.filter(function (y) { return y >= S.y0 && y <= S.y1; });
-    var kmu = yrs.map(function (y) { return [y, kv('운영수지', KMU_ID, y)]; });
+    var main = yrs.map(function (y) { return [y, kv('운영수지', MAIN_ID, y)]; });
+    var opFn = function (sid, y) { return kv('운영수지', sid, y); };
     var lo = [], hi = [], mid = [];
     yrs.forEach(function (y) {
-      var cs = cohortStats('운영수지', y);
+      var cs = BENCH.cohortStats(t1_bench, opFn, y);
       lo.push([y, cs ? cs.p25 : null]); hi.push([y, cs ? cs.p75 : null]); mid.push([y, cs ? cs.p50 : null]);
     });
     C.line(box, {
       height: 280, yZero: true,
-      series: [{ name: '국민대', color: 'var(--kmu)', points: kmu, emphasize: true, label: '국민대' }],
+      series: [{ name: MAIN_NAME, color: schoolColor(MAIN_ID), points: main, emphasize: true, label: MAIN_NAME }],
       band: { lo: lo, hi: hi, mid: mid, color: 'var(--band)' },
       xTicks: yrs, yFmt: F.krwAxis, tipFmt: F.krw,
     });
@@ -1005,25 +1019,27 @@
   function drawSectionBar(box, yr) {
     var inItems = {
       label: '수입', emphasize: true, segs: [
-        { name: '운영수입', value: gv('in', 'OP_IN', KMU_ID, yr), color: 'var(--sec-op)' },
-        { name: '자산·부채', value: gv('in', 'AL_IN', KMU_ID, yr), color: 'var(--sec-asset)' },
-        { name: '기본금', value: gv('in', 'F_기본금', KMU_ID, yr) || 0, color: 'var(--sec-debt)' },
-        { name: '전기이월', value: gv('in', 'CF_PREV', KMU_ID, yr), color: 'var(--sec-carry)' },
+        { name: '운영수입', value: gv('in', 'OP_IN', MAIN_ID, yr), color: 'var(--sec-op)' },
+        { name: '자산·부채', value: gv('in', 'AL_IN', MAIN_ID, yr), color: 'var(--sec-asset)' },
+        { name: '기본금', value: gv('in', 'F_기본금', MAIN_ID, yr) || 0, color: 'var(--sec-debt)' },
+        { name: '전기이월', value: gv('in', 'CF_PREV', MAIN_ID, yr), color: 'var(--sec-carry)' },
       ]
     };
     var exItems = {
       label: '지출', segs: [
-        { name: '운영지출', value: gv('ex', 'OP_EX', KMU_ID, yr), color: 'var(--sec-op)' },
-        { name: '자산·부채', value: gv('ex', 'AL_EX', KMU_ID, yr), color: 'var(--sec-asset)' },
-        { name: '차기이월', value: gv('ex', 'CF_NEXT', KMU_ID, yr), color: 'var(--sec-carry)' },
+        { name: '운영지출', value: gv('ex', 'OP_EX', MAIN_ID, yr), color: 'var(--sec-op)' },
+        { name: '자산·부채', value: gv('ex', 'AL_EX', MAIN_ID, yr), color: 'var(--sec-asset)' },
+        { name: '차기이월', value: gv('ex', 'CF_NEXT', MAIN_ID, yr), color: 'var(--sec-carry)' },
       ]
     };
     C.bar(box, { items: [inItems, exItems], stacked: true, valFmt: F.krwAxis, labelW: 60, rowH: 46, maxBar: 26 });
   }
-  function bandLegend(name) {
+  function bandLegend(groupLabel) {
+    var g = groupLabel || '코호트';
+    var isKmu = (MAIN_ID === KMU_ID);
     return h('div', { class: 'legend' }, [
-      h('span', { class: 'lg kmu', html: '<i></i>국민대' }),
-      h('span', { class: 'lg', html: '<i class="band" style="background:var(--band)"></i>코호트 p25~p75' }),
+      h('span', { class: 'lg' + (isKmu ? ' kmu' : ''), html: '<i style="background:' + schoolColor(MAIN_ID) + '"></i>' + MAIN_NAME }),
+      h('span', { class: 'lg', html: '<i class="band" style="background:var(--band)"></i>' + g + ' p25~p75' }),
       h('span', { class: 'lg', html: '<i class="dash" style="color:var(--band)"></i>중앙값(p50)' }),
     ]);
   }
@@ -1327,7 +1343,7 @@
   }
   function drawStructTrend(box, side, code, sid, mode) {
     var yrs = YEARS.slice(), pop = filteredSchoolIds(), totCode = totCodeOf(side);
-    var selfColor = sid === KMU_ID ? 'var(--kmu)' : 'var(--series-1)';
+    var selfColor = schoolColor(sid);   // 색계약: 국민대→파랑 영구, 그 외 시리즈색(비국민대 파랑 금지)
     if (mode === 'abs') {
       var self = yrs.map(function (y) { return [y, gv(side, code, sid, y)]; });
       var mid = yrs.map(function (y) { var st = stats(pop.map(function (p) { return gv(side, code, p, y); })); return [y, st ? st.p50 : null]; });
@@ -1356,26 +1372,27 @@
     return totWordOf(side) + ' 대비 비중이 ' + fy + '→' + ly + ' ' + (dp >= 0 ? '+' : '') + dp.toFixed(1) + '%p ' + (dp >= 0 ? '확대' : '축소');
   }
 
-  // ── 공유 벤치마크: 총계 대비 구성비 백분위(모집단·같은 규모·같은 권역) ──
+  // ── 공유 벤치마크: 총계 대비 구성비 백분위(전국 · 수도권 · 경쟁대학) ──
   // renderAnalysisPanel(수지 구조 패널)과 계정 분석 매트릭스가 동일 값을 쓰도록 단일 구현.
-  // 반환: [{name,short,ids,n,mean,pctile,diff,selfShare}] · pctile 0~1(높을수록 구성비 상위)
+  // 전역 기준군(BENCH) 구동 — 사이드바 필터와 독립 축. 금액지표는 구성비(share-of-total) 백분위(§3.2).
+  // 반환: [{name,short,pop,n,med,mean,pctile,diff,selfShare}] · pctile 0~1(높을수록 구성비 상위) · diff=자교−중앙값(%p)
   function benchmarkGroups(side, code, sid, yr) {
     var totCode = totCodeOf(side);
     function shareOf(id) { var vv = gv(side, code, id, yr), tt = gv(side, totCode, id, yr); return (vv != null && tt) ? vv / tt : null; }
     var selfShare = shareOf(sid);
-    var allIds = schools.map(function (s, i) { return i; });
     var defs = [
-      { name: '현재 필터 모집단', short: '모집단', ids: filteredSchoolIds() },
-      { name: '같은 규모 · ' + schools[sid].scale, short: '같은 규모', ids: allIds.filter(function (i) { return schools[i].scale === schools[sid].scale; }) },
-      { name: '같은 권역 · ' + schools[sid].region, short: '같은 권역', ids: allIds.filter(function (i) { return schools[i].region === schools[sid].region; }) },
+      { name: '전국', short: '전국', pop: 'national' },
+      { name: '수도권', short: '수도권', pop: 'metro' },
+      { name: '경쟁대학', short: '경쟁', pop: 'competitor' },
     ];
     return defs.map(function (g) {
-      var vals = g.ids.map(shareOf).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; });
+      var vals = BENCH.idsFor(g.pop).map(shareOf).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; });
       var n = vals.length;
       var mean = n ? vals.reduce(function (a, b) { return a + b; }, 0) / n : null;
+      var med = n ? quantile(vals, 0.5) : null;
       var pctile = (n > 1 && selfShare != null) ? vals.filter(function (x) { return x < selfShare; }).length / (n - 1) : null;
-      var diff = (mean != null && selfShare != null) ? (selfShare - mean) * 100 : null;
-      return { name: g.name, short: g.short, n: n, mean: mean, pctile: pctile, diff: diff, selfShare: selfShare };
+      var diff = (med != null && selfShare != null) ? (selfShare - med) * 100 : null;
+      return { name: g.name, short: g.short, pop: g.pop, n: n, med: med, mean: mean, pctile: pctile, diff: diff, selfShare: selfShare };
     });
   }
 
@@ -1395,21 +1412,22 @@
   function cvBand(cv) { return cv == null ? null : (cv < 0.15 ? 'rigid' : (cv > 0.4 ? 'volatile' : 'mid')); }
   var CV_LABEL = { rigid: '경직성', mid: '보통', volatile: '변동성' };
 
-  // D — 3중 벤치마크 (모집단 · 같은 규모 · 같은 권역)
+  // D — 기준군 벤치마크 (전국 · 수도권 · 경쟁대학)
   function benchCard(side, code, sid, yr, selfShare) {
     var body = h('div', { class: 'bench' });
+    var accent = schoolColor(sid);
     benchmarkGroups(side, code, sid, yr).forEach(function (g) {
-      var n = g.n, mean = g.mean, pctile = g.pctile, diff = g.diff;
+      var n = g.n, pctile = g.pctile, diff = g.diff;
       var diffClr = (side === 'ex' && diff != null && diff > 0) ? 'var(--serious)' : 'var(--text-secondary)';
       body.appendChild(h('div', { class: 'bench-row' }, [
         h('div', { class: 'bench-head' }, [h('span', { class: 'bench-name', text: g.name }), h('span', { class: 'bench-n', text: 'n=' + n })]),
-        h('div', { class: 'bench-meter' }, [barMeter(pctile, 'var(--kmu)'),
-          h('span', { class: 'meter-val', style: 'color:var(--kmu)', text: pctile == null ? '—' : F.percentileLabel(pctile) })]),
-        h('div', { class: 'bench-diff', style: 'color:' + diffClr, text: diff == null ? '집단 평균 대비 —' : ('집단 평균 대비 ' + (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%p') }),
+        h('div', { class: 'bench-meter' }, [barMeter(pctile, accent),
+          h('span', { class: 'meter-val', style: 'color:' + accent, text: pctile == null ? '—' : F.percentileLabel(pctile) })]),
+        h('div', { class: 'bench-diff', style: 'color:' + diffClr, text: diff == null ? '집단 중앙값 대비 —' : ('집단 중앙값 대비 ' + (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%p') }),
       ]));
     });
     return h('div', { class: 'card' }, [
-      cardHead('compare', 'var(--series-6)', '3중 벤치마크', totWordOf(side) + ' 대비 구성비 백분위 · 중립 표기'),
+      cardHead('compare', 'var(--series-6)', '기준군 벤치마크', totWordOf(side) + ' 대비 구성비 백분위 · 전국·수도권·경쟁 · 중립 표기'),
       body,
     ]);
   }
@@ -1603,8 +1621,8 @@
   function accInsights(side, sid, yr, metrics, sideColor) {
     var sig = metrics.filter(function (m) { return m.share != null && m.share >= 0.01 && m.val != null; });
 
-    // 1) 동류(같은 규모) 대비 편차 극단 Top 5
-    var dev = sig.map(function (m) { var g = benchmarkGroups(side, m.code, sid, yr)[1]; return { m: m, pctile: g.pctile, diff: g.diff }; })
+    // 1) 전국 대비 편차 극단 Top 5 (전국 기준군 구성비 백분위)
+    var dev = sig.map(function (m) { var g = benchmarkGroups(side, m.code, sid, yr)[0]; return { m: m, pctile: g.pctile, diff: g.diff }; })
       .filter(function (x) { return x.pctile != null && (x.pctile <= 0.15 || x.pctile >= 0.85); })
       .sort(function (a, b) { return Math.abs(b.pctile - 0.5) - Math.abs(a.pctile - 0.5); }).slice(0, 5);
     // 2) 급증·급감 Top 5 (절대 증감액)
@@ -1625,8 +1643,8 @@
     function emptyRow(txt) { return h('div', { class: 'ins-empty', text: txt }); }
 
     // 카드 1
-    var c1 = h('div', { class: 'card' }, [cardHead('compare', 'var(--series-6)', '동류 대비 편차 Top 5',
-      '같은 규모 집단 구성비 백분위가 극단(상위/하위 15% 이내) · 구성비 1%↑')]);
+    var c1 = h('div', { class: 'card' }, [cardHead('compare', 'var(--series-6)', '전국 대비 편차 Top 5',
+      '전국 기준군 구성비 백분위가 극단(상위/하위 15% 이내) · 구성비 1%↑')]);
     var l1 = h('div', { class: 'ins-list' });
     if (!dev.length) l1.appendChild(emptyRow('극단 편차 계정이 없습니다.'));
     dev.forEach(function (x) {
@@ -1678,14 +1696,17 @@
     var tbl = h('table', { class: 'data acc-matrix' });
     tbl.appendChild(h('thead', {}, [h('tr', {}, [
       h('th', { text: '계정' }), h('th', { text: '금액(억원)' }), h('th', { text: '구성비' }), h('th', { text: '전년비' }),
-      h('th', { class: 'spk', text: '9개년' }), h('th', { text: '모집단' }), h('th', { text: '같은 규모' }), h('th', { text: '같은 권역' }),
+      h('th', { class: 'spk', text: '9개년' }), h('th', { text: '전국' }), h('th', { text: '수도권' }), h('th', { text: '경쟁' }),
       h('th', { text: '학생 1인당' }), h('th', { text: '성격' }),
     ])]));
     var tbody = h('tbody');
     var sparkTasks = [], shown = 0, hiddenZero = 0;
 
+    // 기준군 셀: 구성비 백분위(상위%) 막대 + 집단 중앙값 툴팁(hover)
     function benchCell(g) {
-      return h('td', {}, [h('div', { class: 'acc-bench' }, [
+      var tip = g.name + ' 중앙값 ' + (g.med == null ? '—' : F.pct(g.med, 1)) + ' · n=' + g.n
+        + (g.pctile == null ? '' : (' · ' + F.percentileLabel(g.pctile)));
+      return h('td', { title: tip }, [h('div', { class: 'acc-bench' }, [
         h('div', { class: 'mini-rr' }, [h('div', { class: 'mini-rr-fill', style: g.pctile == null ? 'width:0' : ('width:' + Math.max(3, g.pctile * 100).toFixed(0) + '%;background:' + color) })]),
         h('span', { class: 'meter-val', text: g.pctile == null ? '—' : ('상위' + Math.round((1 - g.pctile) * 100) + '%') }),
       ])]);
@@ -1724,7 +1745,7 @@
 
     var card = h('div', { class: 'card' }, [
       cardHead('accounts', sideColor, '전 계정 분석 매트릭스 — ' + schools[sid].n + ' · ' + yr + '년 ' + accSideWord(side),
-        '계층 들여쓰기 · 금액/구성비/전년비 · 9개년 스파크라인 · 벤치마크 백분위 3종(총계 대비 구성비, 상위%) · 학생 1인당 · 성격(CV). 행 클릭 → 수지 구조 심층 분석'
+        '계층 들여쓰기 · 금액/구성비/전년비 · 9개년 스파크라인 · 기준군 백분위 3종(전국·수도권·경쟁 구성비 대비, 상위%·hover 중앙값) · 학생 1인당 · 성격(CV). 행 클릭 → 수지 구조 심층 분석'
         + (hiddenZero && !S.t8_zero ? ' · 0원 ' + hiddenZero + '개 숨김' : '')),
     ]);
     card.appendChild(h('div', { class: 'tbl-wrap acc-wrap' }, [tbl]));
@@ -1742,6 +1763,9 @@
   // ═══════════════════════════════════════════════════════
   //  탭 3 — 시계열
   // ═══════════════════════════════════════════════════════
+  // 기준군 오버레이 표시 토글(범례 클릭). 색계약: 파랑은 국민대 전용 → 기준군 선은 중립/비파랑.
+  var t3_show = { national: true, metro: true, competitor: true };
+  var TS_BENCH_COLOR = { metro: 'var(--series-4)', competitor: 'var(--series-3)' };  // 비파랑(보라·앰버)
   function renderTimeseries(v) {
     var m = S.t3_metric;
     // 지표 선택: KPI select + 계정 검색
@@ -1768,56 +1792,79 @@
       ctrl('또는 계정 검색', h('div', {}, [search, results])),
     ]));
 
-    // 메인 차트
-    var title, fmt, tipFmt, yFmt, higher;
+    // 메인 차트 — 메인대학 실선 + 전국 p25~p75 밴드/중앙값 + 수도권·경쟁 중앙값 점선(§4 플래그십)
+    var title, fmt, tipFmt, yFmt, valueFn;
     var yrs = YEARS.filter(function (y) { return y >= S.y0 && y <= S.y1; });
-    var kmuPts, band = null;
     if (m.type === 'kpi') {
       var meta = KPI_META[m.name]; title = meta.label; fmt = meta.fmt;
-      kmuPts = yrs.map(function (y) { return [y, kv(m.name, KMU_ID, y)]; });
-      var lo = [], hi = [], mid = [];
-      yrs.forEach(function (y) { var cs = cohortStats(m.name, y); lo.push([y, cs ? cs.p25 : null]); hi.push([y, cs ? cs.p75 : null]); mid.push([y, cs ? cs.p50 : null]); });
-      band = { lo: lo, hi: hi, mid: mid, color: 'var(--band)' };
+      valueFn = function (sid, y) { return kv(m.name, sid, y); };
       yFmt = fmt === 'pct' ? function (x) { return F.pct(x, 0); } : F.krwAxis;
       tipFmt = fmt === 'pct' ? function (x) { return F.pct(x); } : F.krw;
     } else {
       var acc = ACC[m.side][m.code]; title = (m.side === 'in' ? '수입·' : '지출·') + acc.name; fmt = 'krw';
-      kmuPts = yrs.map(function (y) { return [y, gv(m.side, m.code, KMU_ID, y)]; });
-      var lo2 = [], hi2 = [], mid2 = [], pop = filteredSchoolIds();
-      yrs.forEach(function (y) { var st = stats(pop.map(function (p) { return gv(m.side, m.code, p, y); })); lo2.push([y, st ? st.p25 : null]); hi2.push([y, st ? st.p75 : null]); mid2.push([y, st ? st.p50 : null]); });
-      band = { lo: lo2, hi: hi2, mid: mid2, color: 'var(--band)' };
+      valueFn = function (sid, y) { return gv(m.side, m.code, sid, y); };
       yFmt = F.krwAxis; tipFmt = F.krw;
     }
+    var mainPts = yrs.map(function (y) { return [y, valueFn(MAIN_ID, y)]; });
+    // 기준군별 연도 중앙값(+전국 밴드) 계산
+    function groupMid(pop) { return yrs.map(function (y) { var st = BENCH.cohortStats(pop, valueFn, y); return [y, st ? st.p50 : null]; }); }
+    var natLo = [], natHi = [], natMid = [];
+    yrs.forEach(function (y) { var st = BENCH.cohortStats('national', valueFn, y); natLo.push([y, st ? st.p25 : null]); natHi.push([y, st ? st.p75 : null]); natMid.push([y, st ? st.p50 : null]); });
+    var band = t3_show.national ? { lo: natLo, hi: natHi, mid: natMid, color: 'var(--band)' } : null;
+
+    var series = [{ name: MAIN_NAME, color: schoolColor(MAIN_ID), points: mainPts, emphasize: true, label: MAIN_NAME }];
+    if (t3_show.metro) series.push({ name: '수도권 중앙값', color: TS_BENCH_COLOR.metro, points: groupMid('metro'), dashed: true, dim: true });
+    if (t3_show.competitor) series.push({ name: '경쟁 중앙값', color: TS_BENCH_COLOR.competitor, points: groupMid('competitor'), dashed: true, dim: true });
+
     var events = (DATA.meta.notes || []).map(function (nt) { return { x0: nt.span[0], x1: nt.span[1], label: nt.label }; });
 
     var mainCard = h('div', { class: 'card' }, [
-      h('h3', { text: title + ' — 국민대 vs 코호트' }),
-      h('div', { class: 'card-sub', text: '국민대 실선 · 코호트 p25~p75 밴드 · p50 점선 · 이벤트 음영(입학금 폐지 등)' }),
+      h('h3', { text: title + ' — ' + MAIN_NAME + ' vs 기준군' }),
+      h('div', { class: 'card-sub', text: MAIN_NAME + ' 실선 · 전국 p25~p75 밴드·중앙값 · 수도권·경쟁 중앙값 점선 · 범례 클릭으로 기준군 on/off · 이벤트 음영' }),
     ]);
     var mainBox = chartBox(320); mainCard.appendChild(mainBox);
-    mainCard.appendChild(bandLegend());
+    mainCard.appendChild(tsBenchLegend());
     v.appendChild(mainCard);
     v.appendChild(h('div', { class: 'spacer-v' }));
 
-    C.line(mainBox, { height: 320, series: [{ name: '국민대', color: 'var(--kmu)', points: kmuPts, emphasize: true, label: '국민대' }], band: band, events: events, xTicks: yrs, yFmt: yFmt, tipFmt: tipFmt, yZero: fmt === 'krw' });
+    C.line(mainBox, { height: 320, series: series, band: band, events: events, xTicks: yrs, yFmt: yFmt, tipFmt: tipFmt, yZero: fmt === 'krw' });
 
     // Small multiples (KPI 10)
-    var smCard = h('div', { class: 'card' }, [h('h3', { text: 'KPI Small Multiples — 국민대 ' + S.y0 + '~' + S.y1 }), h('div', { class: 'card-sub', text: '10개 지표 동시 조망 · 클릭하면 위 차트에 로드' })]);
+    var smCard = h('div', { class: 'card' }, [h('h3', { text: 'KPI Small Multiples — ' + MAIN_NAME + ' ' + S.y0 + '~' + S.y1 }), h('div', { class: 'card-sub', text: '10개 지표 동시 조망 · 클릭하면 위 차트에 로드' })]);
     var sm = h('div', { class: 'small-mult' });
     KPI_KEYS.forEach(function (k) {
       var meta = KPI_META[k];
-      var cur = kv(k, KMU_ID, S.y1);
+      var cur = kv(k, MAIN_ID, S.y1);
       var cell = h('div', { class: 'sm-cell', style: 'cursor:pointer', onClick: function () { S.t3_metric = { type: 'kpi', name: k }; render(); } }, [
         h('div', { class: 'sm-title', text: meta.label }),
         h('div', { class: 'sm-val', text: S.y1 + ': ' + F.byFmt(cur, meta.fmt) }),
       ]);
       var box = chartBox(46); cell.appendChild(box);
       sm.appendChild(cell);
-      var pts = yrs.map(function (y) { return [y, kv(k, KMU_ID, y)]; });
-      C.sparkline(box, { points: pts, color: 'var(--kmu)', height: 46 });
+      var pts = yrs.map(function (y) { return [y, kv(k, MAIN_ID, y)]; });
+      C.sparkline(box, { points: pts, color: schoolColor(MAIN_ID), height: 46 });
     });
     smCard.appendChild(sm);
     v.appendChild(smCard);
+  }
+
+  // 시계열 기준군 범례(토글). 메인=고정, 전국/수도권/경쟁=클릭 on/off. 색계약 준수(파랑=국민대).
+  function tsBenchLegend() {
+    var isKmu = (MAIN_ID === KMU_ID);
+    var lg = h('div', { class: 'legend' });
+    lg.appendChild(h('span', { class: 'lg' + (isKmu ? ' kmu' : ''), html: '<i style="background:' + schoolColor(MAIN_ID) + '"></i>' + MAIN_NAME }));
+    function tog(key, iconHtml, label) {
+      var on = t3_show[key];
+      lg.appendChild(h('span', { class: 'lg', style: 'cursor:pointer;opacity:' + (on ? '1' : '0.38'),
+        title: (on ? '숨기기' : '표시') + ': ' + label,
+        onClick: function () { t3_show[key] = !t3_show[key]; render(); }
+      }, [h('span', { html: iconHtml + label })]));
+    }
+    tog('national', '<i class="band" style="background:var(--band)"></i>', '전국 p25~p75');
+    tog('national', '<i class="dash" style="color:var(--band)"></i>', '전국 중앙값');
+    tog('metro', '<i class="dash" style="color:' + TS_BENCH_COLOR.metro + '"></i>', '수도권 중앙값');
+    tog('competitor', '<i class="dash" style="color:' + TS_BENCH_COLOR.competitor + '"></i>', '경쟁 중앙값');
+    return lg;
   }
 
   // ═══════════════════════════════════════════════════════
