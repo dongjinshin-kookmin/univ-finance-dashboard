@@ -39,6 +39,12 @@
   --kmu-soft: rgba(0,79,159,0.08);
   --kmu-soft-2: rgba(0,79,159,0.13);
 
+  /* 분석 주체(메인 대학) 액센트 — 분석주체 표면 한정(히어로·워크스페이스·홈 요약).
+     메인=국민대 → JS가 --main=var(--kmu). 메인≠국민대 → --main=var(--main-alt)(비파랑 잉크 슬레이트).
+     파랑(#004F9F)은 국민대 엔티티 전용이므로 --main-alt는 파랑과 명확히 구분. */
+  --main:     var(--kmu);
+  --main-alt: #33415c;
+
   /* 코호트 분포 밴드/히스토그램 = 중립 슬레이트 */
   --band:     #8791a3;
 
@@ -97,6 +103,8 @@
     --kmu-strong:#8cc0f5;
     --kmu-soft: rgba(79,155,239,0.13);
     --kmu-soft-2: rgba(79,155,239,0.22);
+    --main:     var(--kmu);
+    --main-alt: #9fb0c9;
     --band:     #6f7889;
     --sec-op:   #3f82e6; --sec-asset:#12a67d; --sec-debt:#d56d26; --sec-carry:#7c8494;
     --good:#2bb865; --warning:#e3ab2c; --serious:#e8823f; --critical:#f2615f;
@@ -117,6 +125,7 @@
   --series-1:#3f82e6; --series-2:#12a67d; --series-3:#b6851b; --series-4:#8f6fe6;
   --series-5:#dc5c98; --series-6:#1795a6; --series-7:#e35c5c; --series-8:#d56d26;
   --kmu:#4f9bef; --kmu-strong:#8cc0f5; --kmu-soft:rgba(79,155,239,0.13); --kmu-soft-2:rgba(79,155,239,0.22);
+  --main:var(--kmu); --main-alt:#9fb0c9;
   --band:#6f7889;
   --sec-op:#3f82e6; --sec-asset:#12a67d; --sec-debt:#d56d26; --sec-carry:#7c8494;
   --good:#2bb865; --warning:#e3ab2c; --serious:#e8823f; --critical:#f2615f;
@@ -986,6 +995,70 @@ table.acc-matrix .muted-dash { color: var(--muted); }
 .sim-limits { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
 .sim-limits li { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.5; }
 @media (max-width: 560px) { .ssb-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ══════════ 폐교(존속) 위험 판정 (C6) ══════════ */
+.sim-closure { position: relative; }
+.sim-beta-inline { position: absolute; top: 15px; right: 15px; }
+@media (max-width: 560px) { .sim-beta-inline { position: static; margin-top: 8px; } }
+
+/* 코호트 모드 섹션 구분자 */
+.sim-sep-h { display: flex; align-items: center; gap: 12px; margin: 4px 2px; color: var(--muted); font-size: 0.72rem; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
+.sim-sep-h::before, .sim-sep-h::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* 등급 칩 */
+.grade-chip { display: inline-flex; align-items: center; font-size: 0.74rem; font-weight: 740; padding: 3px 11px; border-radius: 999px; white-space: nowrap; }
+.grade-chip.g-stable { background: var(--good-soft); color: var(--good); }
+.grade-chip.g-caution { background: var(--warn-soft); color: var(--warning); }
+.grade-chip.g-atrisk { background: color-mix(in srgb, var(--serious) 15%, transparent); color: var(--serious); }
+.grade-chip.g-critical { background: var(--bad-soft); color: var(--critical); }
+.grade-chip.g-unrated { background: var(--surface-2); color: var(--muted); }
+
+/* 개별 대학 등급 배너 */
+.clo-banner { display: flex; flex-direction: column; gap: 3px; margin: 12px 0; padding: 14px 16px; border-radius: var(--radius-sm); border-left: 4px solid var(--border); background: var(--surface-1); }
+.clo-banner.g-stable { border-left-color: var(--good); background: var(--good-soft); }
+.clo-banner.g-caution { border-left-color: var(--warning); background: var(--warn-soft); }
+.clo-banner.g-atrisk { border-left-color: var(--serious); background: color-mix(in srgb, var(--serious) 11%, transparent); }
+.clo-banner.g-critical { border-left-color: var(--critical); background: var(--bad-soft); }
+.clo-banner.g-unrated { border-left-color: var(--muted); background: var(--surface-2); }
+.clo-grade-big { font-size: 1.5rem; font-weight: 820; color: var(--text-primary); line-height: 1.1; }
+.clo-grade-desc { font-size: 0.8rem; color: var(--text-secondary); }
+.clo-band { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+/* 근거 스칼라 그리드 */
+.clo-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 9px; margin-top: 4px; }
+.clo-stat { padding: 9px 11px; background: var(--surface-2); border-radius: var(--radius-xs); }
+.clo-stat .cs-v { font-size: 1rem; font-weight: 760; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.clo-stat .cs-l { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+.clo-drivers { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 11px; }
+.clo-dr-lab { font-size: 0.72rem; color: var(--muted); font-weight: 680; }
+.clo-dr-chip { font-size: 0.72rem; font-weight: 680; padding: 3px 9px; border-radius: 999px; background: var(--bad-soft); color: var(--critical); }
+
+/* 헤드라인 hero */
+.clo-headline { border-top: 3px solid var(--serious); }
+.clo-hero { display: flex; align-items: center; gap: 24px; margin-top: 14px; flex-wrap: wrap; }
+.clo-hero-num { display: flex; align-items: baseline; gap: 6px; }
+.clo-hero-num .chn-n { font-size: 3.2rem; font-weight: 850; color: var(--serious); line-height: 1; font-variant-numeric: tabular-nums; }
+.clo-hero-num .chn-u { font-size: 1.1rem; font-weight: 700; color: var(--text-secondary); }
+.clo-hero-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.clo-hero-lab { font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); }
+.clo-hero-badges { display: flex; gap: 7px; }
+.clo-hero-range { font-size: 0.74rem; color: var(--muted); }
+.clo-hero-delta { font-size: 0.78rem; font-weight: 720; color: var(--muted); }
+.clo-hero-delta.up { color: var(--critical); }
+
+.clo-legend { margin-top: 12px; }
+.clo-legend .lg i { width: 12px; height: 12px; border-radius: 3px; }
+
+/* 전이 카드 */
+.clo-transition .clo-tr-row { display: flex; gap: 12px; margin-top: 12px; }
+.clo-tr-row .clo-stat { flex: 1; text-align: center; }
+.clo-tr-row .cs-v { font-size: 1.5rem; }
+
+/* 검증·정직성 */
+.clo-vf-badge { font-size: 0.82rem; line-height: 1.5; padding: 10px 13px; border-radius: var(--radius-sm); background: var(--good-soft); color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--good) 28%, transparent); margin: 8px 0; }
+.clo-vf-badge b { color: var(--good); font-weight: 780; }
+.clo-honesty li { color: var(--text-secondary); }
+.clo-table-more { margin-top: 11px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

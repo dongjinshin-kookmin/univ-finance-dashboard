@@ -467,6 +467,23 @@ def _assert_sim_integrity(doc):
         for j in range(len(sk) - 1):
             assert sk[j] >= sk[j + 1] - 1e-9, f"sim[{idx}].s_k 비단조"
 
+        # stock(A8): 3필드 존재 + 비음수(None 허용)
+        stock = e.get("stock")
+        assert isinstance(stock, dict), f"sim[{idx}].stock 없음"
+        for k in ("reserve_avail", "reserve_month0", "corp_capacity"):
+            assert k in stock, f"sim[{idx}].stock.{k} 누락"
+            sv = stock.get(k)
+            assert sv is None or sv >= -1e-6, f"sim[{idx}].stock.{k} 음수 {sv}"
+
+    # stock 커버리지 가드(회귀 방지): reserve_avail·reserve_month0 ≥ 90%
+    n = len(bs)
+    ra_cov = sum(1 for e in bs.values()
+                 if (e.get("stock") or {}).get("reserve_avail") is not None)
+    rm_cov = sum(1 for e in bs.values()
+                 if (e.get("stock") or {}).get("reserve_month0") is not None)
+    assert ra_cov >= 0.9 * n, f"sim.stock.reserve_avail 커버리지 {ra_cov}/{n} < 90%"
+    assert rm_cov >= 0.9 * n, f"sim.stock.reserve_month0 커버리지 {rm_cov}/{n} < 90%"
+
 
 def _write(doc, path):
     with open(path, "w", encoding="utf-8") as fh:

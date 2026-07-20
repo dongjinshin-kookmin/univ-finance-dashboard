@@ -28,6 +28,14 @@ import config
 RHO_G_DEFAULT = 1.4          # 대학원/학부 등록금 배율(설계 1.4·부록). φ 분해 핵심 민감모수.
 UNIT_PRICE = "천원"           # p_ug·base 스칼라 저장 단위
 
+# 가용적립금 haircut (설계 §7-5, A8 확정). stock.reserve_avail 산정용.
+# 2024 실측(balance_sheet.csv, n=289 적립금보유교) discretionary/total 분포로 확정:
+#   자산가중 평균 0.958 · 단순평균 0.978 · 중앙값 1.0 (243/289교가 정확히 1.0, principal=0).
+#   → 적립금총액의 거의 전부가 재량(임의)적립금 = 가용. 기존 가정 0.80은 과도 보수.
+# 채택 0.95 = 자산가중 평균(0.958)에 소폭 하향 보수. reserve_discretionary 실측이 없는
+# 연도·학교(주로 2024 미제출·과거연도)에만 적용하며, 2024 보유교는 실측 discretionary를 직접 사용.
+RESERVE_HAIRCUT = 0.95
+
 # 정원외 재학 배율 m_out (설계 2.3: 편입·외국인 재원기간 ≈ 정규과정). 유형별.
 M_OUT_BY_TYPE = {"대학": 4.0, "사이버대학": 4.0, "전문대학": 2.5, "대학원대학": 4.0}
 M_OUT_DEFAULT = 4.0
@@ -145,7 +153,20 @@ def _load_inputs(interim, dashboard_path):
                 pop18.setdefault(r["sido"], {})[r["year"]] = round(d, 6)
     except FileNotFoundError:
         pass
-    return doc, grad, sb, tui, price_cap, pop_corr, pop18
+
+    # balance_sheet: (canonical, year) → {reserve_total, reserve_discretionary} (A8 stock)
+    bs = {}
+    try:
+        for r in _load_csv(interim, "balance_sheet.csv"):
+            y = _num(r.get("year"))
+            if r.get("canonical") and y is not None:
+                bs[(r["canonical"], int(y))] = {
+                    "reserve_total": _num(r.get("reserve_total")),
+                    "reserve_discretionary": _num(r.get("reserve_discretionary")),
+                }
+    except FileNotFoundError:
+        pass
+    return doc, grad, sb, tui, price_cap, pop_corr, pop18, bs
 
 
 def _latest_rows(rows):
@@ -172,6 +193,62 @@ def _base_scalars(doc, row_i):
         edu[key] = _colval(col, row_i) if col is not None else None
     base["edu_cost"] = edu
     return base
+
+
+def _latest_reserve(bs, canon, base_year):
+    """base_year의 balance_sheet 행. 결측 시 최신 가용 연도 행으로 fallback.
+    반환: (row_dict|None, used_year|None, is_base_year)."""
+    row = bs.get((canon, base_year)) if base_year is not None else None
+    if row is not None and row.get("reserve_total") is not None:
+        return row, base_year, True
+    yrs = [y for (c, y) in bs if c == canon and bs[(c, y)].get("reserve_total") is not None]
+    if yrs:
+        y = max(yrs)
+        return bs[(canon, y)], y, (y == base_year)
+    return None, None, False
+
+
+def _compute_stock(doc, idx, canon, base_year, base, bs):
+    """학교별 stock 블록(설계 §3·A8): reserve_avail·reserve_month0·corp_capacity.
+
+    reserve_avail: 2024 재량적립금(reserve_discretionary) 실측 있으면 그대로,
+      없으면 reserve_total × RESERVE_HAIRCUT(설계 §7-5). 적립금 전무 시 None.
+    reserve_month0: 적립금총액 / (OP_EX/12). OP_EX 결측·0이면 None.
+    corp_capacity: max(0, corp2024.revenue − 현행전입(base.c5210)). corp 결측이면 None(설계 §7-4).
+    avail_src: 'discretionary'|'haircut'|'none' — reserve_avail 산출 근거(B5 신뢰도용).
+    """
+    row, used_year, is_base = _latest_reserve(bs, canon, base_year)
+    reserve_total = row.get("reserve_total") if row else None
+    # reserve_discretionary는 실측 연도(2024) 행일 때만 유효
+    disc = row.get("reserve_discretionary") if (row and is_base) else None
+
+    if disc is not None:
+        reserve_avail, avail_src = disc, "discretionary"
+    elif reserve_total is not None:
+        reserve_avail, avail_src = round(reserve_total * RESERVE_HAIRCUT, 4), "haircut"
+    else:
+        reserve_avail, avail_src = None, "none"
+
+    op_ex = base.get("cOP_EX")
+    reserve_month0 = (round(reserve_total / (op_ex / 12.0), 4)
+                      if (reserve_total is not None and op_ex not in (None, 0)) else None)
+
+    corp_capacity = None
+    ext = doc.get("ext") or {}
+    extra_list = ext.get("schools_extra") or []
+    corp2024 = (extra_list[idx].get("corp2024")
+                if idx < len(extra_list) else None) or None
+    if corp2024 and corp2024.get("revenue") is not None:
+        transfer_now = base.get("c5210") or 0.0
+        corp_capacity = round(max(0.0, corp2024["revenue"] - transfer_now), 4)
+
+    return {
+        "reserve_avail": reserve_avail,
+        "reserve_month0": reserve_month0,
+        "corp_capacity": corp_capacity,
+        "avail_src": avail_src,
+        "reserve_year": used_year,
+    }
 
 
 # ── 학교별 원시 파라미터 계산 ─────────────────────────────────────────
@@ -391,7 +468,7 @@ def compute_sim_params(doc=None, interim_dir=None, dashboard_path=None):
     """
     interim = Path(interim_dir) if interim_dir else config.INTERIM_DIR
     dpath = Path(dashboard_path) if dashboard_path else (config.BUILD_DIR / "dashboard_data.json")
-    loaded, grad, sb, tui, price_cap, pop_corr, pop18 = _load_inputs(interim, dpath)
+    loaded, grad, sb, tui, price_cap, pop_corr, pop18, bs = _load_inputs(interim, dpath)
     if doc is None:
         doc = loaded
 
@@ -428,6 +505,8 @@ def compute_sim_params(doc=None, interim_dir=None, dashboard_path=None):
         s = schools[idx]
         status = raw["status"]
         entry = {"base": base_by_idx[idx], "bt": None,
+                 "stock": _compute_stock(doc, idx, s["n"], year_by_idx[idx],
+                                         base_by_idx[idx], bs),
                  "flags": {"year": year_by_idx[idx]}}
 
         if status == "ok":
@@ -525,6 +604,10 @@ _META_NOTES = [
     "p_ug 200만~1,200만.",
     "pop_corr·pop18_decline은 A7(D4 인구 실적) 산출물 동봉 — 최종 통합·재계산은 A7 담당.",
     "bt(백테스트 지표)는 D1에서 채움(현재 null).",
+    "stock(A8, 설계 §3): reserve_avail(가용적립금)·reserve_month0(적립금월수)·corp_capacity(법인여력). "
+    "reserve_avail=2024 재량적립금 실측 있으면 직접, 없으면 reserve_total×0.95(haircut, 2024 실측 "
+    "discretionary/total 자산가중 0.958 기반). corp_capacity=max(0, corp2024.revenue−현행전입(5210)), "
+    "corp 결측이면 null(설계 §7-4 회계중복 미검증 보수 산정). avail_src로 산출근거 병기.",
 ]
 
 
@@ -547,7 +630,22 @@ def validate_sim(sim):
         sk = (e.get("surv") or {}).get("s_k") or []
         if sk and not _monotone(sk):
             v["violations"].append((idx, "s_k_nonmonotone", None))
+        # stock(A8): 존재 + 비음수
+        stock = e.get("stock")
+        if not isinstance(stock, dict):
+            v["violations"].append((idx, "stock_missing", None))
+        else:
+            for k in ("reserve_avail", "reserve_month0", "corp_capacity"):
+                sv = stock.get(k)
+                if sv is not None and sv < -1e-6:
+                    v["violations"].append((idx, f"neg_stock_{k}", sv))
     v["ok"] = len(v["violations"]) == 0
+    # stock 커버리지(진단용)
+    n = len(sim["bySchool"])
+    cov = {k: sum(1 for e in sim["bySchool"].values()
+                  if isinstance(e.get("stock"), dict) and e["stock"].get(k) is not None)
+           for k in ("reserve_avail", "reserve_month0", "corp_capacity")}
+    v["stock_coverage"] = {k: (c, n) for k, c in cov.items()}
     return v
 
 

@@ -16,6 +16,7 @@ import accounts
 import transform
 import validate
 import build_json
+import closure_calib
 
 
 def _step(label, fn):
@@ -62,6 +63,11 @@ def main():
     cov = " ".join(f"{k}={v*100:.1f}%" for k, v in js["ext_cov"].items())
     print(f"    ext 커버리지: {cov}")
     print(f"    ext closure_traj 표본: {js['closure_n']}교")
+
+    # A9: 폐교 보정 데이터셋(build_json 이후 — dashboard_data.json 소비)
+    cc, cc_out = _step("closure_calib", closure_calib.run)
+    print(f"    positives {len(cc['positives'])} / survivors {len(cc['survivors'])}"
+          f" / disputes_I2 {len(cc['disputes_I2'])}")
 
     print("\n산출물:")
     for p in ("accounts.json", "schools.csv", "tidy.csv.gz",

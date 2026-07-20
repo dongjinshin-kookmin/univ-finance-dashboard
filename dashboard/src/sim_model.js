@@ -351,6 +351,271 @@
     return { omitted: false, lo: lo, hi: hi, z: z, sigma_rel: mape };
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  B5 — 폐교(존속) 위험 등급  SIM.closureGrade  (설계 §2 게이트 매트릭스)
+  //  두 축(존속성 M · 완충 runway) 매트릭스 + 오버라이드 5종 + 경계밴드.
+  //  입력: schoolSim(stock/seg/surv/base/flags/bt), projection(SIM.project 결과, null 허용), opts.
+  //    projection != null → 라이브 시뮬 판정(정착 M·rollforward runway).
+  //    projection == null → 관측 스냅샷 판정(opts.obs = {marginRate, fill, reserveAvail,
+  //                          reserveMonths, corpCapacity, ...}). 폐교교 T-1/T-2 스냅샷·역검증용.
+  //  순수 함수: DOM·전역 DATA 미접근, 모든 입력은 인자.
+  // ══════════════════════════════════════════════════════════════════════
+  var GRADE_RANK = { stable: 0, caution: 1, atrisk: 2, critical: 3 };
+  var GRADE_BY_RANK = ['stable', 'caution', 'atrisk', 'critical'];
+
+  // 판정 매트릭스[marginClass][bufferClass] (설계 §2).
+  //   margin: 0 Healthy(≥2%) · 1 Thin(0~2%) · 2 Deficit(−10~0%) · 3 Severe(<−10%)
+  //   buffer: 0 Strong(R≥10) · 1 Moderate(5~10) · 2 Thin(2~5) · 3 Depleted(<2 또는 월수<1)
+  var CLOSURE_MATRIX = [
+    ['stable',  'stable',  'caution', 'caution'],   // Healthy
+    ['stable',  'caution', 'caution', 'atrisk'],    // Thin
+    ['caution', 'caution', 'atrisk',  'atrisk'],    // Deficit
+    ['caution', 'atrisk',  'atrisk',  'critical']   // Severe
+  ];
+
+  function marginClass(M) {
+    if (M == null) return null;
+    if (M >= 0.02) return 0;        // Healthy
+    if (M >= 0) return 1;           // Thin
+    if (M >= -0.10) return 2;       // Deficit
+    return 3;                       // Severe
+  }
+  function bufferClass(R, reserveMonths) {
+    // Depleted 우선: R<2 또는 적립금월수<1 (설계 §2, 오버라이드 ⑤ 내재)
+    if ((reserveMonths != null && reserveMonths < 1) || (R != null && R < 2)) return 3;
+    if (R == null) return null;
+    if (R < 5) return 2;            // Thin
+    if (R < 10) return 1;           // Moderate
+    return 0;                       // Strong
+  }
+  function matrixGrade(mc, bc) {
+    if (mc == null && bc == null) return 'stable';   // 신호 부재 → 오버라이드가 보정
+    if (mc == null) mc = 0;         // 재무 미상 → 흑자 가정(보수적 하한), fill 오버라이드가 교정
+    if (bc == null) bc = 0;         // 완충 미상 → Strong 가정
+    return CLOSURE_MATRIX[mc][bc];
+  }
+
+  // 오버라이드(설계 §2 우선순위): ④ 흑자+월수<3 안정금지 → ② 충원<0.65 최소위험 → ① 충원<0.50 심각.
+  // ①이 최우선이므로 마지막에 적용해 우선. ③(Severe∧Depleted→critical)·⑤(월수<1∧적자→Depleted)는 매트릭스 내재.
+  function applyOverrides(grade, M, fill, reserveMonths) {
+    var r = GRADE_RANK[grade];
+    if (reserveMonths != null && reserveMonths < 3 && M != null && M >= 0 && r < GRADE_RANK.caution) {
+      grade = 'caution'; r = 1;                      // ④ 안정 금지(주의 상한)
+    }
+    if (fill != null && fill < 0.65 && r < GRADE_RANK.atrisk) {
+      grade = 'atrisk'; r = 2;                        // ② 최소 위험
+    }
+    if (fill != null && fill < 0.50) {
+      grade = 'critical'; r = 3;                      // ① 심각
+    }
+    return grade;
+  }
+
+  // 완충 소진 rollforward(설계 §2): reserve_{t+1}=reserve_t+primed운영수지(t)+corp_addl.
+  // 첫 음수해 = 소진예상, R=소진연도−t0. horizon 내 미소진이면 정착수지로 외삽(선린대 R≈68 재현).
+  function runwayRollforward(reserve0, perYearBal, corpAddl, years, t0, win) {
+    var reserve = reserve0 != null ? reserve0 : 0;
+    var i, bal, next;
+    for (i = 0; i < years.length; i++) {
+      bal = (perYearBal[i] != null ? perYearBal[i] : 0) + corpAddl;
+      next = reserve + bal;
+      if (next < 0) {
+        var frac = bal < 0 ? reserve / (-bal) : 0;
+        frac = frac < 0 ? 0 : (frac > 1 ? 1 : frac);
+        var R = (years[i] - t0) + frac;
+        return { R: R, depletionYear: Math.round(t0 + R) };
+      }
+      reserve = next;
+    }
+    var settle = 0, cnt = 0;
+    for (i = Math.max(0, perYearBal.length - win); i < perYearBal.length; i++) {
+      if (perYearBal[i] != null) { settle += perYearBal[i]; cnt++; }
+    }
+    settle = (cnt ? settle / cnt : 0) + corpAddl;
+    if (settle >= 0) return { R: Infinity, depletionYear: null };
+    var lastY = years[years.length - 1];
+    var R2 = (lastY - t0) + reserve / (-settle);
+    return { R: R2, depletionYear: Math.round(t0 + R2) };
+  }
+
+  // 관측 모드 runway: 적립금월수/|적자율| (설계 §2 선린대 (7.35/12)/0.009≈68 검산선).
+  function runwayFromMonths(M, reserveMonths) {
+    if (M == null || M >= 0) return Infinity;         // 흑자·미상 → 소진 없음
+    var mo = reserveMonths != null ? reserveMonths : 0;
+    return (mo / 12) / (-M);
+  }
+
+  // 경계밴드(설계 §4): 운영수지'에 ±z·σ(σ=bt.mape_rev) + runway 임계 {2,5,10}±1y 섭동 재판정.
+  function closureBoundary(baseGrade, M, fill, runway, reserveMonths, bt) {
+    var z = 1.28, ranks = [GRADE_RANK[baseGrade]];
+    var mape = (bt && bt.mape_rev != null) ? bt.mape_rev : null;
+    var Ms = [M], Rs = [runway];
+    if (mape != null && M != null) {
+      var half = z * mape * Math.abs(M);
+      Ms = [M - half, M, M + half];
+    }
+    var near = (runway != null && isFinite(runway)) &&
+               [2, 5, 10].some(function (t) { return Math.abs(runway - t) <= 1; });
+    if (near) Rs = [runway - 1, runway, runway + 1];
+    for (var a = 0; a < Ms.length; a++) {
+      for (var b = 0; b < Rs.length; b++) {
+        var g = applyOverrides(matrixGrade(marginClass(Ms[a]), bufferClass(Rs[b], reserveMonths)),
+                               Ms[a], fill, reserveMonths);
+        ranks.push(GRADE_RANK[g]);
+      }
+    }
+    var lo = Math.min.apply(null, ranks), hi = Math.max.apply(null, ranks);
+    return { flag: lo !== hi, range: [GRADE_BY_RANK[lo], GRADE_BY_RANK[hi]] };
+  }
+
+  function closureGrade(schoolSim, projection, opts) {
+    opts = opts || {};
+    var stock = schoolSim.stock || {};
+    var flags = schoolSim.flags || {};
+    var obs = opts.obs || null;
+
+    // ── 입력 해상(관측 obs 우선 → stock 폴백) ──
+    var reserveAvail = (obs && obs.reserveAvail != null) ? obs.reserveAvail
+      : (stock.reserve_avail != null ? stock.reserve_avail
+      : (opts.reserveAvailFallback != null ? opts.reserveAvailFallback : null));
+    var reserveMonths = (obs && obs.reserveMonths !== undefined) ? obs.reserveMonths
+      : (stock.reserve_month0 != null ? stock.reserve_month0 : null);
+    var corpCap = (obs && obs.corpCapacity !== undefined) ? obs.corpCapacity
+      : (stock.corp_capacity != null ? stock.corp_capacity : null);
+    var corpAddl = (opts.useCorpSupport && corpCap != null) ? corpCap : 0;
+
+    var M = null, fill = null, runway = Infinity, depletionYear = null, refYear = null;
+
+    if (projection != null) {
+      var P = projection.params || {};
+      var horizon = P.horizon != null ? P.horizon : 10;
+      var win = Math.min(3, horizon);
+      var kseries = opts.kpiSeries || recalcSeries(schoolSim, projection, projection.params, opts);
+      var mAcc = 0, mCnt = 0, perYearBal = [];
+      for (var i = 0; i < kseries.length; i++) {
+        var pr = kseries[i].primed || {};
+        perYearBal.push(pr['운영수지'] != null ? pr['운영수지'] : null);
+        if (i >= kseries.length - win && pr['운영수지율'] != null) { mAcc += pr['운영수지율']; mCnt++; }
+      }
+      M = mCnt ? mAcc / mCnt : null;
+      var f0 = projection.meta ? projection.meta.f0 : null;   // 신입생 충원율 = A_in/Q (설계 §3)
+      fill = f0;
+      if (f0 != null && P.lambda) {
+        var drift = cumDrift(opts.meta || {}, opts.sido, P.t0, P.t0 + horizon);
+        fill = f0 * (1 + P.lambda * drift);                   // λ-on: 인구드리프트 정착 충원율
+      }
+      var roll = runwayRollforward(reserveAvail, perYearBal, corpAddl, projection.years, P.t0, win);
+      runway = roll.R; depletionYear = roll.depletionYear; refYear = P.t0;
+    } else {
+      M = obs && obs.marginRate != null ? obs.marginRate : null;
+      fill = obs && obs.fill != null ? obs.fill : null;
+      runway = runwayFromMonths(M, reserveMonths);
+      refYear = opts.obsYear != null ? opts.obsYear : (flags.year != null ? flags.year : null);
+      if (isFinite(runway) && refYear != null) depletionYear = Math.round(refYear + runway);
+    }
+
+    // ── 미분류: 학부미보유·대학원대·데이터부재 (설계 §1) ──
+    var isNoUg = flags.status === 'no_ug' || opts.noUg === true;
+    var isGrad = opts.isGrad === true || (opts.type != null && /대학원/.test(opts.type));
+    var dataAbsent = (M == null && fill == null);
+    if (isNoUg || isGrad || dataAbsent) {
+      return {
+        grade: 'unrated', runwayYears: null, depletionYear: null,
+        marginEnd: M, fill: fill, buffer0: reserveAvail, reserveMonths: reserveMonths,
+        drivers: [], confidence: 'low', boundaryFlag: false, gradeRange: ['unrated', 'unrated']
+      };
+    }
+
+    // ── 매트릭스 + 오버라이드 ──
+    var mc = marginClass(M), bc = bufferClass(runway, reserveMonths);
+    var grade = applyOverrides(matrixGrade(mc, bc), M, fill, reserveMonths);
+
+    // ── drivers(결정 게이트, 설명가능성) ──
+    var drivers = [];
+    if (mc === 3) drivers.push('severe');
+    else if (mc === 2) drivers.push('deficit');
+    if (bc === 3) drivers.push('no_buffer');
+    if (reserveMonths != null && reserveMonths < 3) drivers.push('liquidity');
+    if (fill != null && fill < 0.65) drivers.push('low_fill');
+
+    // ── 경계밴드 ──
+    var bnd = closureBoundary(grade, M, fill, runway, reserveMonths, schoolSim.bt);
+
+    // ── confidence: 백테스트 bt 있으면 ok · 그 외 beta(D6 합격 전 베타) ──
+    var confidence = (schoolSim.bt != null) ? 'ok' : 'beta';
+
+    return {
+      grade: grade,
+      runwayYears: (runway === Infinity || !isFinite(runway)) ? Infinity : runway,
+      depletionYear: depletionYear,
+      marginEnd: M, fill: fill, buffer0: reserveAvail, reserveMonths: reserveMonths,
+      drivers: drivers, confidence: confidence,
+      boundaryFlag: bnd.flag, gradeRange: bnd.range
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  B6 — 전국 집계  SIM.closureAggregate  (344교 project→closureGrade)
+  //  입력: simData(sim 객체 또는 bySchool 맵), params(사용자 시나리오), opts.
+  //    opts.meta = sim.meta · opts.schools = 학교 메타 배열[idx]={sido,region,scale,type}(호출측 주입)
+  //    opts.useCorpSupport = 법인지원 토글.
+  //  DOM·전역 DATA 비의존: 모든 메타는 opts.schools로 주입. 성능: 344교×2회(현재+기준 r=0).
+  // ══════════════════════════════════════════════════════════════════════
+  function bumpBucket(agg, key, grade) {
+    if (!agg[key]) agg[key] = { stable: 0, caution: 0, atrisk: 0, critical: 0, unrated: 0, atRiskOrWorse: 0, total: 0 };
+    agg[key][grade]++; agg[key].total++;
+    if (GRADE_RANK[grade] >= GRADE_RANK.atrisk) agg[key].atRiskOrWorse++;
+  }
+
+  function closureAggregate(simData, params, opts) {
+    opts = opts || {};
+    var bySchool = simData.bySchool || simData;
+    var meta = opts.meta || simData.meta || {};
+    var schoolsMeta = opts.schools || [];
+    var counts = { stable: 0, caution: 0, atrisk: 0, critical: 0, unrated: 0 };
+    var atRiskOrWorse = 0, atRiskLo = 0, atRiskHi = 0;
+    var byRegion = {}, byScale = {};
+    var trSchools = [], downgraded = 0, newAtRisk = 0;
+
+    var baseParams = {};
+    for (var k in params) baseParams[k] = params[k];
+    baseParams.r = 0;                                   // 기준 시나리오(전이 비교 기준)
+
+    var idxs = Object.keys(bySchool);
+    for (var ii = 0; ii < idxs.length; ii++) {
+      var idx = idxs[ii], sSim = bySchool[idx], sm = schoolsMeta[+idx] || {};
+      var o = { meta: meta, sido: sm.sido, type: sm.type, useCorpSupport: opts.useCorpSupport };
+
+      var proj = project(sSim, params, o);
+      var g = closureGrade(sSim, proj, o);
+      var proj0 = project(sSim, baseParams, o);
+      var g0 = closureGrade(sSim, proj0, o);
+
+      counts[g.grade]++;
+      var rank = GRADE_RANK[g.grade];
+      if (rank >= GRADE_RANK.atrisk) atRiskOrWorse++;
+      if (g.grade !== 'unrated') {
+        if (GRADE_RANK[g.gradeRange[0]] >= GRADE_RANK.atrisk) atRiskLo++;   // 최소(최선 경계)
+        if (GRADE_RANK[g.gradeRange[1]] >= GRADE_RANK.atrisk) atRiskHi++;   // 최대(최악 경계)
+      }
+      bumpBucket(byRegion, sm.region || '기타', g.grade);
+      bumpBucket(byScale, sm.scale || '기타', g.grade);
+
+      if (g0.grade !== 'unrated' && g.grade !== 'unrated' && rank > GRADE_RANK[g0.grade]) {
+        downgraded++;
+        if (GRADE_RANK[g0.grade] < GRADE_RANK.atrisk && rank >= GRADE_RANK.atrisk) newAtRisk++;
+        trSchools.push({ idx: +idx, from: g0.grade, to: g.grade });
+      }
+    }
+    return {
+      counts: counts,
+      atRiskOrWorse: atRiskOrWorse,
+      atRiskRange: [atRiskLo, atRiskHi],
+      byRegion: byRegion, byScale: byScale,
+      transitions: { downgraded: downgraded, newAtRisk: newAtRisk, schools: trSchools }
+    };
+  }
+
   // ── 전역 노출 ───────────────────────────────────────────
   global.SIM = {
     project: project,
@@ -360,10 +625,16 @@
     recalcSeries: recalcSeries,
     scenarios: scenarios,
     residualBand: residualBand,
+    closureGrade: closureGrade,
+    closureAggregate: closureAggregate,
     // 내부 유틸(테스트·트랙 C 편의)
     _util: {
       reductionOf: reductionOf, piRateOf: piRateOf, cumDrift: cumDrift,
-      resolveParams: resolveParams, KPI_DEFS: KPI_DEFS, SCENARIO_BUNDLES: SCENARIO_BUNDLES
+      resolveParams: resolveParams, KPI_DEFS: KPI_DEFS, SCENARIO_BUNDLES: SCENARIO_BUNDLES,
+      marginClass: marginClass, bufferClass: bufferClass, matrixGrade: matrixGrade,
+      applyOverrides: applyOverrides, runwayRollforward: runwayRollforward,
+      runwayFromMonths: runwayFromMonths, CLOSURE_MATRIX: CLOSURE_MATRIX,
+      GRADE_RANK: GRADE_RANK
     }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SIM;

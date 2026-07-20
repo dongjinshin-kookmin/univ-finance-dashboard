@@ -18,6 +18,7 @@ var sim = JSON.parse(fs.readFileSync(path.join(ROOT, 'build/interim/sim_params.j
 var doc = JSON.parse(fs.readFileSync(path.join(ROOT, 'build/dashboard_data.json'), 'utf8'));
 var schools = doc.schools;
 var meta = sim.meta;
+var calib = JSON.parse(fs.readFileSync(path.join(ROOT, 'build/interim/closure_calib.json'), 'utf8'));
 
 // KMU 인덱스 확정
 var KMU = 52;
@@ -114,6 +115,111 @@ function maxAbs(arr) { return arr.reduce(function (m, x) { return Math.max(m, Ma
   check('(부가) 시나리오 레벨 순서 낙관≥기준≥비관 + bt=null 밴드 생략', ordered && bandOK,
     '5100\' 레벨(t0+10): 낙관=' + Math.round(lOpt) + ' 기준=' + Math.round(lBase) + ' 비관=' + Math.round(lPess) +
     ' | band.omitted=' + band.omitted);
+})();
+
+// ══════════════════════════════════════════════════════════════════════
+//  B5·B6 — 폐교(존속) 위험 판정 검증 (설계 §2·§4·§5, WBS B5+B6 검증 요구 a~e)
+// ══════════════════════════════════════════════════════════════════════
+var RISKPLUS = { atrisk: true, critical: true };   // 위험+ = 위험 ∪ 심각
+
+// (a) 국민대 r=0 → 안정 + runway 무한(설계 §5: 기존 crisis 55.8 "주의" 오분류 교정 확인)
+(function () {
+  var proj = SIM.project(kmu, { r: 0, t0: 2025, horizon: 10 }, optsK);
+  var g = SIM.closureGrade(kmu, proj, optsK);
+  var pass = g.grade === 'stable' && g.runwayYears === Infinity;
+  check('(폐a) 국민대 r=0 → 안정 · runway ∞ (crisis 오분류 교정)', pass,
+    'grade=' + g.grade + ' runway=' + g.runwayYears + ' M=' + (g.marginEnd * 100).toFixed(2) + '% fill=' + g.fill.toFixed(3));
+})();
+
+// (b) 폐교교 T-1(재무 결측 시 마지막 관측연도 T-2 fallback) 관측 판정 → 4년제 4/4 위험+
+//     projection=null 관측 모드. 민감도 게이트(설계 §5 D6 ≥4/5) 사전 확인.
+(function () {
+  var uni4 = [], detail = [];
+  calib.positives.forEach(function (p) {
+    var t1 = p.T1, t2 = p.T2 || {};
+    var obs = {
+      fill:          t1['충원율']    != null ? t1['충원율']    : t2['충원율'],
+      marginRate:    t1['운영수지율'] != null ? t1['운영수지율'] : t2['운영수지율'],   // 재무 결측 → T-2
+      reserveMonths: t1['적립금월수'] != null ? t1['적립금월수'] : t2['적립금월수'],
+      reserveAvail:  t1.reserve_avail != null ? t1.reserve_avail : t2.reserve_avail
+    };
+    var sSim = sim.bySchool[String(p.idx)] || { stock: {}, flags: {} };
+    var g = SIM.closureGrade(sSim, null, { obs: obs, type: p.school_type, noUg: p.no_ug, obsYear: t1.year });
+    if (p.school_type === '대학') uni4.push({ n: p.school, g: g.grade, ok: !!RISKPLUS[g.grade] });
+    detail.push(p.school.replace('학교', '') + '=' + g.grade);
+  });
+  var hit = uni4.filter(function (x) { return x.ok; }).length;
+  var pass = uni4.length === 4 && hit === 4;
+  check('(폐b) 폐교교 관측 판정 → 4년제 ' + hit + '/4 위험+ (민감도 게이트)', pass,
+    detail.join(' · '));
+})();
+
+// (c) r 증가 시 전국 atRiskOrWorse 단조 비감소(집계 정합)
+(function () {
+  var aggOpts = { meta: meta, schools: schools };
+  var rs = [0, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50];
+  var seq = [], mono = true, prev = -1;
+  rs.forEach(function (r) {
+    var agg = SIM.closureAggregate(sim, { r: r, t0: 2025, horizon: 10 }, aggOpts);
+    seq.push(agg.atRiskOrWorse);
+    if (agg.atRiskOrWorse < prev) mono = false;
+    prev = agg.atRiskOrWorse;
+  });
+  check('(폐c) r↑ → atRiskOrWorse 단조 비감소', mono,
+    'N(위험+) @ r' + JSON.stringify(rs) + ' = ' + JSON.stringify(seq));
+})();
+
+// (d) 생존 대조군(설계 §5): 총신대 ≤주의 · 선린대 주의 · 상지대 위험+(감축 스트레스 트로프)
+(function () {
+  function survObs(idx, name) {
+    var s = calib.survivors.filter(function (x) { return x.school.indexOf(name) === 0; })[0];
+    var sn = s.snapshot;
+    var g = SIM.closureGrade(sim.bySchool[String(s.idx)], null,
+      { obs: { fill: sn['충원율'], marginRate: sn['운영수지율'], reserveMonths: sn['적립금월수'], reserveAvail: sn.reserve_avail },
+        type: schools[s.idx].type, obsYear: sn.year });
+    return { idx: s.idx, g: g };
+  }
+  var rankOf = SIM._util.GRADE_RANK;
+  var chongshin = survObs(288, '총신');       // 관측: 안정 (≥+17.6%·월수17.7)
+  var seonlin   = survObs(171, '선린');       // 관측: 주의 (−0.9%·R≈68)
+  // 상지대: 2024 관측은 흑자(구제 후) → 주의. 설계 §2 "trough R≈0.67" = 감축 스트레스 판정.
+  var sangjiObs = survObs(146, '상지');
+  var sangji = sangjiObs.idx;
+  var pj = SIM.project(sim.bySchool[String(sangji)], { r: 0.15, t0: 2025, horizon: 10 },
+    { meta: meta, sido: schools[sangji].sido });
+  var sangjiStress = SIM.closureGrade(sim.bySchool[String(sangji)], pj, { meta: meta, sido: schools[sangji].sido });
+
+  var pass = rankOf[chongshin.g.grade] <= rankOf.caution &&
+             seonlin.g.grade === 'caution' &&
+             !!RISKPLUS[sangjiStress.grade];
+  check('(폐d) 총신대 ≤주의 · 선린대 주의 · 상지대 위험+(스트레스)', pass,
+    '총신대=' + chongshin.g.grade + ' 선린대=' + seonlin.g.grade +
+    ' | 상지대 관측(r0)=' + sangjiObs.g.grade + ' → 감축r0.15=' + sangjiStress.grade +
+    ' (M=' + (sangjiStress.marginEnd * 100).toFixed(1) + '%)');
+})();
+
+// (e) 344교 스모크: NaN·음수 없음(관측/projection 양경로). unrated는 runway=null 정상.
+(function () {
+  var bad = [], aggOpts = { meta: meta, schools: schools };
+  Object.keys(sim.bySchool).forEach(function (idx) {
+    var sSim = sim.bySchool[idx], o = { meta: meta, sido: schools[+idx].sido, type: schools[+idx].type };
+    var proj = SIM.project(sSim, { r: 0.2, t0: 2025, horizon: 10 }, o);
+    var g = SIM.closureGrade(sSim, proj, o);
+    var R = g.runwayYears;
+    if (['stable', 'caution', 'atrisk', 'critical', 'unrated'].indexOf(g.grade) < 0) bad.push(idx + ':grade');
+    if (g.grade !== 'unrated' && R !== Infinity && (R == null || isNaN(R) || R < 0)) bad.push(idx + ':R=' + R);
+    if (g.marginEnd != null && isNaN(g.marginEnd)) bad.push(idx + ':M');
+    if (g.fill != null && (isNaN(g.fill) || g.fill < 0)) bad.push(idx + ':fill');
+    if (g.reserveMonths != null && (isNaN(g.reserveMonths) || g.reserveMonths < 0)) bad.push(idx + ':mo');
+  });
+  // 집계 스모크: counts 합 = 344, atRiskRange가 점추정을 브래킷
+  var agg = SIM.closureAggregate(sim, { r: 0.2, t0: 2025, horizon: 10 }, aggOpts);
+  var sum = agg.counts.stable + agg.counts.caution + agg.counts.atrisk + agg.counts.critical + agg.counts.unrated;
+  var bracket = agg.atRiskRange[0] <= agg.atRiskOrWorse && agg.atRiskOrWorse <= agg.atRiskRange[1];
+  var pass = bad.length === 0 && sum === Object.keys(sim.bySchool).length && bracket;
+  check('(폐e) 344교 스모크: NaN·음수 0 · counts합=' + sum + ' · range 브래킷', pass,
+    'bad=' + (bad.length ? bad.slice(0, 5).join(',') : '없음') +
+    ' | 위험+=' + agg.atRiskOrWorse + ' range=' + JSON.stringify(agg.atRiskRange));
 })();
 
 // ── 출력 ─────────────────────────────────────────────────────────────

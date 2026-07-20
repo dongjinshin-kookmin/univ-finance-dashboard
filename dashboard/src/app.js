@@ -23,9 +23,69 @@
   var rows = DATA.rows;
   var LITE = !!DATA.meta.lite;
 
-  // KMU
+  // KMU — 국민대 엔티티(색 계약: 파랑 #004F9F 영구 고정). 단일 진실.
   var KMU_ID = schools.findIndex(function (s) { return s.kmu; });
   if (KMU_ID < 0) KMU_ID = 0;
+
+  // ── 기본설정 · 파생 전역 (settings.js) ─────────────────────
+  // 색(엔티티 정체성) = KMU_ID→파랑 영구, 강조(분석 주체) = MAIN_ID 추종. 둘을 분리.
+  var SET = window.SETTINGS;
+  var SCHOOL_NAMES = new Set(schools.map(function (s) { return s.n; }));
+  function idByName(name) { return schools.findIndex(function (s) { return s.n === name; }); }
+
+  // 파생 런타임 전역(설정 적용 시 재계산). 초기값은 computeDerived가 채움.
+  var SETTINGS_STATE = null;     // 정규화된 현재 설정 {v,mainSchoolName,competitorNames,typeFilter}
+  var MAIN_ID = KMU_ID;          // 분석 주체(가변). 기본 = 국민대.
+  var MAIN_NAME = schools[KMU_ID] ? schools[KMU_ID].n : '';
+  var COMP_IDS = [];             // 경쟁대학 id (메인과 서로소, 1~7)
+  var COMP_ID_SET = new Set();
+  var TYPE_SET = new Set();      // 전역 기준군(전국·수도권) 집계 대상 형태 — 사이드바 S.types와 독립 축
+  var nonMain = [];              // 메인 제외 전체 id
+
+  // 설정 → 파생 전역 재계산(렌더/지속 없음). 이름→id 해석, 메인·경쟁 서로소, 폴백(§7).
+  function computeDerived(settings) {
+    var norm = SET.normalize(settings, { validNames: SCHOOL_NAMES });
+    // 메인 해석: 미해석 시 국민대(없으면 schools[0]) 폴백(§7-5)
+    var mid = idByName(norm.mainSchoolName);
+    if (mid < 0) mid = (KMU_ID >= 0 ? KMU_ID : 0);
+    MAIN_ID = mid;
+    MAIN_NAME = schools[MAIN_ID] ? schools[MAIN_ID].n : '';
+    norm.mainSchoolName = MAIN_NAME;
+    // 경쟁 해석: 미해석 드롭 + 메인 제외(서로소). 공집합 시 기본 6교(메인·미존재 제외).
+    var seen = {}, ids = [];
+    norm.competitorNames.forEach(function (nm) {
+      var i = idByName(nm);
+      if (i >= 0 && i !== MAIN_ID && !seen[i]) { seen[i] = 1; ids.push(i); }
+    });
+    if (ids.length === 0) {
+      SET.defaults().competitorNames.forEach(function (nm) {
+        var i = idByName(nm);
+        if (i >= 0 && i !== MAIN_ID && !seen[i]) { seen[i] = 1; ids.push(i); }
+      });
+    }
+    if (ids.length > 7) ids = ids.slice(0, 7);
+    COMP_IDS = ids;
+    COMP_ID_SET = new Set(ids);
+    // 정규화된 경쟁 이름을 id 기준으로 재작성(가나다 유지)
+    norm.competitorNames = SET.sortKo(ids.map(function (i) { return schools[i].n; }));
+    TYPE_SET = new Set(norm.typeFilter);
+    nonMain = schools.map(function (s, i) { return i; }).filter(function (i) { return i !== MAIN_ID; });
+    SETTINGS_STATE = norm;
+    setMainVisual();
+    return norm;
+  }
+
+  // 분석 주체 시각 게이트(§5): data-main 속성 + --main 토큰. 파랑 제품 크롬은 불변.
+  function setMainVisual() {
+    if (typeof document === 'undefined' || !document.body) return;
+    var isKmu = (MAIN_ID === KMU_ID);
+    document.body.setAttribute('data-main', isKmu ? 'kmu' : 'other');
+    document.documentElement.style.setProperty('--main', isKmu ? 'var(--kmu)' : 'var(--main-alt)');
+  }
+
+  // 부트: 저장된 설정 로드 → 파생 전역 확정(S 정의보다 먼저).
+  var SETTINGS_LOAD = SET.load();
+  computeDerived(SETTINGS_LOAD.settings);
 
   // row 인덱스 + 값 배열 확장(희소 → 밀집)
   var rowIndex = {};
@@ -174,6 +234,9 @@
   // 파랑(series-1)은 국민대 전용으로 예약 → 타교는 series-2~8만 순환
   nonKmu.forEach(function (sid, k) { schoolColorMap[sid] = 'var(--series-' + ((k % 7) + 2) + ')'; });
   function schoolColor(sid) { return sid === KMU_ID ? 'var(--kmu)' : schoolColorMap[sid]; }
+  // 강조(굵기·★·라벨·마커)는 분석 주체(MAIN_ID) 추종 — 색과 분리(§5).
+  // 색은 schoolColor(엔티티: 국민대→파랑 영구), 강조는 schoolEmphasis(메인).
+  function schoolEmphasis(sid) { return sid === MAIN_ID; }
 
   // ── 통계 ────────────────────────────────────────────────
   function quantile(sorted, p) {
@@ -220,19 +283,20 @@
     t8_zero: false,                         // 값 0 계정 표시 토글
     t8_hl: null,                            // 인사이트 클릭 → 매트릭스 하이라이트 코드
     // 탭 — 입학정원 감소 시뮬레이션
-    sim_school: KMU_ID,
+    sim_school: MAIN_ID,
     sim_focus: null,                        // KPI 델타 포커스 연도(null=투영 종착연도)
     sim_mode: 'single',                     // 'single' 개별 대학 | 'cohort' 코호트 집계(C5)
+    sim_closure_all: false,                 // 폐교위험 판정 학교표 전체 펼침(C6)
     sim_params: defaultSimParams(),
   };
 
   function uniq(a) { return a.filter(function (v, i) { return a.indexOf(v) === i; }); }
 
-  // 필터 통과 학교(코호트 모집단). 국민대 강제 포함.
+  // 필터 통과 학교(코호트 모집단). 메인 대학 강제 포함(§2.3 일반화).
   function filteredSchoolIds() {
     var out = [];
     schools.forEach(function (s, i) {
-      if (i === KMU_ID) { out.push(i); return; }
+      if (i === MAIN_ID) { out.push(i); return; }
       if (S.cohort === 'c100' && !s.c100) return;
       if (!S.regions.has(s.region)) return;
       if (!S.scales.has(s.scale)) return;
@@ -246,6 +310,26 @@
     var pop = filteredSchoolIds();
     var vals = pop.map(function (sid) { return kv(kpiName, sid, year); });
     return stats(vals);
+  }
+
+  // ── 전역 기준군 엔진 (benchmark.js) ────────────────────────
+  // 전국/수도권/경쟁 코호트 집계. 설정(typeFilter·COMP_IDS·MAIN) 구동, 사이드바 필터와 독립 축.
+  var BENCH = window.BENCH.create({
+    schools: schools, YEARS: YEARS, kv: kv, stats: stats,
+    getMainId: function () { return MAIN_ID; },
+    getCompIds: function () { return COMP_IDS; },
+    getTypeSet: function () { return TYPE_SET; },
+  });
+
+  // ── 설정 적용 (런타임: P1 설정 페이지가 호출) ───────────────
+  // ①정규화·파생 전역 재계산 ②기준군 캐시 무효화 ③지속(try/catch) ④refresh() 1회.
+  // 반환: { ok, persisted, source, error?, warning? } — P1이 토스트/배너에 사용.
+  function applySettings(next) {
+    var norm = computeDerived(next);          // 검증·정규화 + 파생 전역 + 시각 게이트
+    BENCH.invalidate();                        // 설정 변경 → 기준군 무효화
+    var res = SET.save(norm);                  // 지속(전 경로 try/catch)
+    refresh();                                 // 무캐시 단일 재렌더로 전파(§2.3)
+    return { ok: res.ok, persisted: res.persisted, error: res.error, settings: norm };
   }
 
   // ═══════════════════════════════════════════════════════
@@ -283,7 +367,8 @@
     crisis:    '<path d="M12 3l9 16H3z"/><path d="M12 10v4"/><path d="M12 17.5v.5"/>',
     outlook:   '<path d="M3 3v18h18"/><path d="M20 8l-6 7-4-3-5 6"/><circle cx="20" cy="8" r="1.4"/>',
     shield:    '<path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
-    simulation:'<path d="M4 7h9"/><circle cx="16" cy="7" r="2.4"/><path d="M18.5 7H20"/><path d="M4 12h2.5"/><circle cx="10" cy="12" r="2.4"/><path d="M12.5 12H20"/><path d="M4 17h11"/><circle cx="18" cy="17" r="2.4"/>'
+    simulation:'<path d="M4 7h9"/><circle cx="16" cy="7" r="2.4"/><path d="M18.5 7H20"/><path d="M4 12h2.5"/><circle cx="10" cy="12" r="2.4"/><path d="M12.5 12H20"/><path d="M4 17h11"/><circle cx="18" cy="17" r="2.4"/>',
+    settings:  '<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/>'
   };
   function svgIcon(name) {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + (IC[name] || IC.overview) + '</svg>';
@@ -398,6 +483,7 @@
     { id: 'outlook', label: '구조 전망', title: '구조 전망', eyebrow: 'Outlook · 학령인구 절벽과 수요-공급' },
     { id: 'simulation', label: '감축 시뮬레이션', title: '입학정원 감소 시뮬레이션', eyebrow: 'Simulation · 정원 감축 시나리오 (베타 · 가정 기반)' },
     { id: 'data', label: '데이터·검증', title: '데이터 · 검증', eyebrow: 'Data · 항등식 검증과 원장' },
+    { id: 'settings', label: '기본설정', title: '기본설정', eyebrow: 'Settings · 메인 대학 · 경쟁대학 · 기준군', foot: true },
   ];
   function renderTabs() {
     var nav = document.getElementById('tabs');
@@ -422,7 +508,20 @@
     var cr = document.getElementById('crumbTab'); if (cr) cr.textContent = t ? t.title : '';
     var v = document.getElementById('view');
     v.innerHTML = '';
-    ({ home: renderHome, overview: renderOverview, structure: renderStructure, accounts: renderAccounts, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, simulation: renderSimulation, data: renderData })[S.tab](v);
+    ({ home: renderHome, overview: renderOverview, structure: renderStructure, accounts: renderAccounts, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, simulation: renderSimulation, data: renderData, settings: renderSettings })[S.tab](v);
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  탭 10 — 기본설정 (P0 스텁 · 실제 구현은 P1)
+  // ═══════════════════════════════════════════════════════
+  // P1 계약: applySettings(next)로 저장, SETTINGS_STATE로 현재값 조회, BENCH.counts()로
+  //  기준군 멤버수, buildSchoolSearch(curSid,onPick,width)로 대학 선택. 색/강조는
+  //  schoolColor(엔티티)·schoolEmphasis(메인) 사용. SET(window.SETTINGS)로 내보내기/가져오기.
+  function renderSettings(v) {
+    v.appendChild(h('div', { class: 'card' }, [
+      cardHead('settings', 'var(--main)', '기본설정', '메인 대학 · 경쟁대학 · 집계 필터 (준비 중)'),
+      h('p', { class: 'hint', text: '설정 페이지는 준비 중입니다.' }),
+    ]));
   }
 
   // ═══════════════════════════════════════════════════════
@@ -1976,6 +2075,7 @@
       fillMode: 'realistic', beta: d.beta != null ? d.beta : 0.5, fMax: 1.0,
       piMode: 'freeze', piRate: 0.02, eta5120: d.eta_5120 != null ? d.eta_5120 : 0.3,
       gamma: d.gamma != null ? d.gamma : 0.15, dropout: d.dropout || 0, lambda: d.lambda_ || 0,
+      useCorpSupport: false,                  // 법인 추가지원 반영(폐교위험 판정 완충) · 기본 OFF
     };
   }
   // 기준(base) 시나리오 파라미터 = 공유 사용자값 + 기준 번들(설계 7.1)
@@ -2094,6 +2194,17 @@
     lamField.appendChild(h('div', { class: 'sim-hint', text: '시도 18세 감소의 충원율 전가율(미충원 학교만 실효 · 기본 OFF)' }));
     body.appendChild(lamField);
 
+    // 법인 추가지원 반영 토글 (폐교위험 판정 완충에만 작용, 설계 §7-4)
+    body.appendChild(h('div', { class: 'sim-sep' }));
+    var corpOn = !!P.useCorpSupport;
+    body.appendChild(h('div', { class: 'sim-field' }, [
+      h('div', { class: 'sim-field-head' }, [
+        h('label', { text: '법인 추가지원 반영' }),
+        h('button', { class: 'chip mini' + (corpOn ? ' on' : ''), text: corpOn ? 'ON' : 'OFF', onClick: function () { S.sim_params.useCorpSupport = !corpOn; render(); } }),
+      ]),
+      h('div', { class: 'sim-hint', text: '폐교위험 판정의 완충에 법인전입 여력(corp_capacity) 가산 · 기본 OFF(2024 단일연도 · 커버리지 60.5% · 폐교교 전부 결측이라 보수 산정).' }),
+    ]));
+
     panel.appendChild(body);
     return panel;
   }
@@ -2113,6 +2224,7 @@
         h('p', { class: 'hint', text: '대학원대학 등은 학부 정원 감축 레버에 반응하지 않습니다(설계 1.5·2.5).' }),
       ]));
     }
+    box.appendChild(simClosureCard(sid, entry, proj, P));
     box.appendChild(simFanCard(sid, scen, years));
     box.appendChild(simOpBalCard(sid, scen, years));
     box.appendChild(simKpiCard(scen, years, fy, fi));
@@ -2331,6 +2443,8 @@
 
   // ── C5: 코호트 집계 모드 (반응 학교 시나리오 레벨 합) ──
   function buildSimAggregate(box, P) {
+    buildClosureAggPanel(box, P);   // C6 — 폐교위험 판정 (전국 344교 · §6 정보위계, 필터 무관)
+    box.appendChild(h('div', { class: 'sim-sep-h', html: '<span>코호트 수입·수지 집계 (현재 필터 모집단)</span>' }));
     var pop = filteredSchoolIds().filter(function (sid) { return simEntry(sid); });
     var years = null, n = 0, respN = 0;
     var sOpt, sBas, sPes, sBase, oOpt, oBas, oPes, oOrig;
@@ -2378,6 +2492,211 @@
       cardHead('shield', 'var(--series-6)', '집계 모드 주의', '개별 KPI·세그먼트·백테스트는 대학 선택 모드에서 확인'),
       h('p', { class: 'hint', text: '집계는 반응 세그먼트 보유 학교의 시나리오 레벨 합입니다. 백테스트는 대학 145교 기준(전문대·사이버·대학원대 종단 부재로 검증 불가, 설계 9장·D2 §5).' }),
     ]));
+  }
+
+  // ═══════════════════════════════════════════════════════
+  //  C6 — 폐교(존속) 위험 판정 레이어 (설계 §6 정보위계)
+  //  SIM.closureGrade / closureAggregate 바인딩. 등급 색 = --good/--warning/
+  //  --serious/--critical + neutral (KMU Blue 미사용). D6 합격 전 베타.
+  // ═══════════════════════════════════════════════════════
+  var CLOSURE_GRADES = {
+    stable:   { label: '안정',   tone: 'stable',   color: 'var(--good)',     desc: '흑자 또는 완충 충분 · 충원율 견고' },
+    caution:  { label: '주의',   tone: 'caution',  color: 'var(--warning)',  desc: '적자여도 완충 장기 / 완충 부재 흑자' },
+    atrisk:   { label: '위험',   tone: 'atrisk',   color: 'var(--serious)',  desc: '존속위험 — 완충 2~5년 내 소진권' },
+    critical: { label: '심각',   tone: 'critical', color: 'var(--critical)', desc: '존속위기 — 폐교 직전 재무지문' },
+    unrated:  { label: '미분류', tone: 'unrated',  color: 'var(--muted)',    desc: '학부미보유·대학원대·데이터부재' },
+  };
+  var CLOSURE_STACK_ORDER = ['stable', 'caution', 'atrisk', 'critical', 'unrated'];
+  var CLOSURE_DRIVERS = { severe: '심각적자', deficit: '운영적자', no_buffer: '완충소진', liquidity: '유동성부족', low_fill: '충원율저조' };
+  var CLOSURE_REGION_ORDER = ['수도권', '광역권', '지방권'];
+  var CLOSURE_SCALE_ORDER = ['대규모', '중규모', '소규모'];
+
+  function gradeChip(grade, extra) {
+    var g = CLOSURE_GRADES[grade] || CLOSURE_GRADES.unrated;
+    return h('span', { class: 'grade-chip g-' + g.tone, text: g.label + (extra || '') });
+  }
+  function fmtRunway(y) {
+    if (y == null) return '—';
+    if (y === Infinity || !isFinite(y)) return '소진 없음(흑자)';
+    return (y < 0 ? 0 : y).toFixed(1) + '년';
+  }
+  function verifiedPill() { return h('span', { class: 'pill ok sim-beta-inline', html: '<i></i>역검증 합격 · closure_validation_report' }); }
+  function cloStat(l, v) { return h('div', { class: 'clo-stat' }, [h('div', { class: 'cs-v', text: v }), h('div', { class: 'cs-l', text: l })]); }
+  function closureLegend() {
+    return h('div', { class: 'legend clo-legend' }, CLOSURE_STACK_ORDER.map(function (k) {
+      return h('span', { class: 'lg', html: '<i style="background:' + C.resolveColor(CLOSURE_GRADES[k].color) + '"></i>' + CLOSURE_GRADES[k].label });
+    }));
+  }
+
+  // ── 개별 대학 등급 카드 (설계 §6 학교별 모드) ──
+  function simClosureCard(sid, entry, proj, P) {
+    var opts = { meta: SIMD.meta, sido: schools[sid].sido, type: schools[sid].type, useCorpSupport: !!P.useCorpSupport };
+    var cg = ENG.closureGrade(entry, proj, opts);
+    var g = CLOSURE_GRADES[cg.grade];
+    var card = h('div', { class: 'card sim-closure' });
+    card.appendChild(cardHead('crisis', g.color, '폐교(존속) 위험 판정', schools[sid].n + ' · 현재 시나리오 기준'));
+    card.appendChild(verifiedPill());
+    card.appendChild(h('div', { class: 'clo-banner g-' + g.tone }, [
+      h('div', { class: 'clo-grade-big', text: g.label }),
+      h('div', { class: 'clo-grade-desc', text: g.desc }),
+      cg.boundaryFlag ? h('div', { class: 'clo-band', text: '경계 등급(근소): ' + CLOSURE_GRADES[cg.gradeRange[0]].label + ' ~ ' + CLOSURE_GRADES[cg.gradeRange[1]].label }) : null,
+    ]));
+    card.appendChild(h('div', { class: 'clo-stats' }, [
+      cloStat('완충 소진 여력 (runway)', fmtRunway(cg.runwayYears)),
+      cloStat('소진 예상연도', cg.depletionYear != null ? cg.depletionYear + '년' : '해당 없음'),
+      cloStat('정착 운영수지율 M', cg.marginEnd != null ? F.pct(cg.marginEnd) : '—'),
+      cloStat('신입생 충원율', cg.fill != null ? F.pct(cg.fill) : '—'),
+      cloStat('적립금 소진월수', cg.reserveMonths != null ? cg.reserveMonths.toFixed(1) + '개월' : '—'),
+      cloStat('가용 적립금', F.krw(cg.buffer0)),
+    ]));
+    if (cg.drivers && cg.drivers.length) {
+      var dr = h('div', { class: 'clo-drivers' }, [h('span', { class: 'clo-dr-lab', text: '판정 근거 게이트' })]);
+      cg.drivers.forEach(function (d) { dr.appendChild(h('span', { class: 'clo-dr-chip', text: CLOSURE_DRIVERS[d] || d })); });
+      card.appendChild(dr);
+    }
+    card.appendChild(h('p', { class: 'hint', text: '존속성(운영수지 M)·완충(적립금 소진 runway) 두 축 게이트 매트릭스 판정(설계 §2). 재정 존속위험이며 폐교 확정이 아닙니다.' }));
+    return card;
+  }
+
+  // ── 전 학교 등급 재계산(학교별 배지 테이블용, 현재 시나리오) ──
+  function perSchoolClosure(P) {
+    var out = [], bs = SIMD.bySchool;
+    Object.keys(bs).forEach(function (idx) {
+      var i = +idx, e = bs[idx], sm = schools[i] || {};
+      var o = { meta: SIMD.meta, sido: sm.sido, type: sm.type, useCorpSupport: !!P.useCorpSupport };
+      out.push({ idx: i, name: sm.n, cg: ENG.closureGrade(e, ENG.project(e, P, o), o) });
+    });
+    return out;
+  }
+
+  // ── 등급 분포 스택바(단일/그룹 공용) ──
+  function closureStackCard(icon, iccol, title, sub, groupAgg, order) {
+    var card = h('div', { class: 'card sim-closure' });
+    card.appendChild(cardHead(icon, iccol, title, sub));
+    var keys = order.filter(function (k) { return groupAgg[k] && groupAgg[k].total > 0; });
+    var single = keys.length === 1 && keys[0] === 'all';
+    var hgt = keys.length * 42 + 44;
+    var b = chartBox(hgt); card.appendChild(b);
+    C.bar(b, {
+      height: hgt, stacked: true, labelW: single ? 12 : 92, rowH: 42, maxBar: 24,
+      valFmt: function (v) { return Math.round(v) + '교'; },
+      items: keys.map(function (kk) {
+        var gr = groupAgg[kk];
+        return { label: single ? '' : kk, emphasize: false, segs: CLOSURE_STACK_ORDER.map(function (g) { return { name: CLOSURE_GRADES[g].label, value: gr[g], color: CLOSURE_GRADES[g].color }; }) };
+      }),
+    });
+    card.appendChild(closureLegend());
+    return card;
+  }
+
+  // ── 학교별 배지 테이블 (등급순, 상위 N + 더보기) ──
+  function closureSchoolTable(P) {
+    var rows = perSchoolClosure(P).filter(function (r) { return r.cg.grade !== 'unrated'; });
+    var RANK = ENG._util.GRADE_RANK;
+    rows.sort(function (a, b) {
+      var d = RANK[b.cg.grade] - RANK[a.cg.grade];
+      if (d) return d;
+      var ra = (a.cg.runwayYears == null || !isFinite(a.cg.runwayYears)) ? Infinity : a.cg.runwayYears;
+      var rb = (b.cg.runwayYears == null || !isFinite(b.cg.runwayYears)) ? Infinity : b.cg.runwayYears;
+      return ra - rb;
+    });
+    var LIMIT = 15, showAll = S.sim_closure_all;
+    var shown = showAll ? rows : rows.slice(0, LIMIT);
+    var card = h('div', { class: 'card sim-closure' });
+    card.appendChild(cardHead('data', 'var(--series-1)', '학교별 판정 (위험도순)', rows.length + '개교 · 미분류 제외 · 위험도 높은 순'));
+    var tbl = h('table', { class: 'data' });
+    tbl.appendChild(h('thead', {}, [h('tr', {}, ['대학', '등급', '소진예상', 'M(운영수지율)', '충원율', '근거 게이트'].map(function (t) { return h('th', { text: t }); }))]));
+    var tb = h('tbody');
+    shown.forEach(function (r) {
+      var cg = r.cg;
+      tb.appendChild(h('tr', { class: r.idx === KMU_ID ? 'kmu-row' : null }, [
+        h('td', { text: r.name + (r.idx === KMU_ID ? ' ★' : '') }),
+        h('td', {}, [gradeChip(cg.grade)]),
+        h('td', { text: cg.depletionYear != null ? cg.depletionYear + '년' : '—' }),
+        h('td', { text: cg.marginEnd != null ? F.pct(cg.marginEnd) : '—' }),
+        h('td', { text: cg.fill != null ? F.pct(cg.fill) : '—' }),
+        h('td', { text: (cg.drivers || []).map(function (d) { return CLOSURE_DRIVERS[d] || d; }).join(', ') || '—' }),
+      ]));
+    });
+    tbl.appendChild(tb);
+    card.appendChild(h('div', { class: 'tbl-wrap' }, [tbl]));
+    if (rows.length > LIMIT) {
+      card.appendChild(h('button', { class: 'chip clo-table-more', text: showAll ? '접기' : '더보기 (+' + (rows.length - LIMIT) + '개교)', onClick: function () { S.sim_closure_all = !showAll; render(); } }));
+    }
+    return card;
+  }
+
+  // ── 검증 참조 + 정직성 푸터 (설계 §6-6·§6-7·§7) ──
+  function closureHonestyCard() {
+    var card = h('div', { class: 'card sim-closure sim-acc' });
+    card.appendChild(cardHead('shield', 'var(--series-6)', '검증 참조 · 정직성 고지', '판정의 근거와 한계를 숨기지 않고 표기'));
+    card.appendChild(h('div', { class: 'clo-vf-badge', html: '실제 폐교 <b>5/5 위험+ 판정</b> (역검증 합격 — closure_validation_report). 관측 스냅샷 · look-ahead 없음 · 민감도 5/5 · 건전교 오탐 0 · LOO 강건성 통과 · AUC 0.976. 국민대 안정(기존 위기스코어 55.8 "주의" 오분류 교정).' }));
+    card.appendChild(h('p', { class: 'hint', text: '기준선: closure_traj 폐교 −1년 신입생 충원율 중앙값 0.28. D6 역검증(혼동행렬·특이도·lead-time·LOO) 합격 — 상세는 build/closure_validation_report.md.' }));
+    card.appendChild(h('div', { class: 'sim-limit-head', text: '정직성 고지 (설계 §7)' }));
+    var ul = h('ul', { class: 'sim-limits clo-honesty' });
+    ['이 판정은 재정 존속위험이며 폐교 확정이 아닙니다 — 폐교는 비리·분규·법인구제 등 재정 외 요인이 개입합니다.',
+     '비리·분규·법인 추가지원은 미반영(법인지원은 선택 토글 · 데이터 커버리지 60.5%, 폐교교 전부 결측).',
+     '전문대·사이버·대학원대는 시나리오 투영 미검증 — 관측 스톡 기반 등급만 유효(투영은 베타).',
+     '표본 폐교대학 N=4~6 — 통계적 증명이 아닌 임계값 보정·정합성 점검으로 해석해야 합니다.'].forEach(function (t) { ul.appendChild(h('li', { text: t })); });
+    card.appendChild(ul);
+    return card;
+  }
+
+  // ── 집계 판정 패널 (설계 §6 정보위계 7항목) ──
+  function buildClosureAggPanel(box, P) {
+    var agg = ENG.closureAggregate(SIMD, P, { meta: SIMD.meta, schools: schools, useCorpSupport: !!P.useCorpSupport });
+    var total = 0; CLOSURE_STACK_ORDER.forEach(function (k) { total += agg.counts[k]; });
+    var N = agg.atRiskOrWorse, rng = agg.atRiskRange, tr = agg.transitions;
+
+    // 1) 헤드라인
+    var head = h('div', { class: 'card sim-closure clo-headline' });
+    head.appendChild(cardHead('crisis', 'var(--serious)', '폐교(존속) 위험 판정 — 전국 ' + total + '개교', '이 조건이 이어질 경우의 재정 존속위험 · 필터 무관 전국 기준'));
+    head.appendChild(verifiedPill());
+    head.appendChild(h('div', { class: 'clo-hero' }, [
+      h('div', { class: 'clo-hero-num' }, [h('span', { class: 'chn-n', text: String(N) }), h('span', { class: 'chn-u', text: '개교' })]),
+      h('div', { class: 'clo-hero-side' }, [
+        h('div', { class: 'clo-hero-lab', text: '폐교위험 = 위험 + 심각' }),
+        h('div', { class: 'clo-hero-badges' }, [
+          h('span', { class: 'grade-chip g-critical', text: '심각 ' + agg.counts.critical }),
+          h('span', { class: 'grade-chip g-atrisk', text: '위험 ' + agg.counts.atrisk }),
+        ]),
+        h('div', { class: 'clo-hero-range', text: '경계밴드 범위 ' + rng[0] + '~' + rng[1] + '개교' }),
+        (P.r > 0)
+          ? h('div', { class: 'clo-hero-delta' + (tr.newAtRisk > 0 ? ' up' : '') }, [h('span', { text: '기준(감축 0%) 대비 ' + (tr.newAtRisk > 0 ? '+' + tr.newAtRisk : '±0') + '개교 신규 진입 · 등급 하락 ' + tr.downgraded + '개교' })])
+          : h('div', { class: 'clo-hero-delta', text: '현재 = 기준 시나리오(감축 0%)' }),
+      ]),
+    ]));
+    box.appendChild(head);
+
+    // 2) 등급 분포 스택바(344교)
+    box.appendChild(closureStackCard('overview', 'var(--kmu)', '등급 분포', total + '개교 · 슬라이더 연동 실시간', { all: mkBucket(agg.counts) }, ['all']));
+
+    // 3) 전이 표시
+    if (P.r > 0) {
+      var trCard = h('div', { class: 'card sim-closure clo-transition' });
+      trCard.appendChild(cardHead('outlook', 'var(--series-4)', '기준(감축 0%) 대비 전이', '감축 시나리오가 등급을 얼마나 끌어내리는가'));
+      trCard.appendChild(h('div', { class: 'clo-tr-row' }, [
+        cloStat('등급 하락 개교', String(tr.downgraded)),
+        cloStat('신규 폐교위험 진입', String(tr.newAtRisk)),
+      ]));
+      box.appendChild(trCard);
+    }
+
+    // 4) 권역×등급 · 규모×등급 분포
+    box.appendChild(closureStackCard('compare', 'var(--series-2)', '권역 × 등급 분포', '지방권 집중도 가시화', agg.byRegion, CLOSURE_REGION_ORDER));
+    box.appendChild(closureStackCard('scale', 'var(--series-3)', '규모 × 등급 분포', '소규모 집중도 가시화', agg.byScale, CLOSURE_SCALE_ORDER));
+
+    // 5) 학교별 배지 테이블
+    box.appendChild(closureSchoolTable(P));
+
+    // 6·7) 검증 참조 + 정직성 푸터
+    box.appendChild(closureHonestyCard());
+  }
+  // counts → bucket(스택바 공용 포맷)
+  function mkBucket(counts) {
+    var b = { stable: 0, caution: 0, atrisk: 0, critical: 0, unrated: 0, total: 0 };
+    CLOSURE_STACK_ORDER.forEach(function (k) { b[k] = counts[k] || 0; b.total += b[k]; });
+    return b;
   }
 
   // ═══════════════════════════════════════════════════════
@@ -2694,6 +3013,21 @@
       check('시뮬 탭 SVG 렌더 + 정확도 표', document.querySelectorAll('#view svg').length > 0 &&
         document.querySelectorAll('#view .sim-bt-tbl tbody tr').length > 0);
       S.sim_params = defaultSimParams();
+
+      // 12) 폐교위험 판정 (C6) — 집계 합·경계밴드·단조성·패널 렌더
+      var cOpt = { meta: SIMD.meta, schools: schools };
+      var cagg0 = ENG.closureAggregate(SIMD, defaultSimParams(), cOpt);
+      var cSum0 = cagg0.counts.stable + cagg0.counts.caution + cagg0.counts.atrisk + cagg0.counts.critical + cagg0.counts.unrated;
+      check('폐교판정 집계 합=' + schools.length + ' · 위험+ 범위내',
+        cSum0 === schools.length && cagg0.atRiskOrWorse >= cagg0.atRiskRange[0] && cagg0.atRiskOrWorse <= cagg0.atRiskRange[1]);
+      var cp10 = defaultSimParams(); cp10.r = 0.1;
+      var cagg10 = ENG.closureAggregate(SIMD, cp10, cOpt);
+      check('폐교판정 r=10% 위험+ 단조 증가', cagg10.atRiskOrWorse >= cagg0.atRiskOrWorse);
+      S.tab = 'simulation'; S.sim_mode = 'cohort'; S.sim_params = defaultSimParams(); S.sim_params.r = 0.1; render();
+      check('폐교판정 패널 렌더(헤드라인 수치 + 등급칩)',
+        document.querySelectorAll('#view .clo-headline .chn-n').length > 0 &&
+        document.querySelectorAll('#view .grade-chip').length > 0);
+      S.sim_mode = 'single'; S.sim_params = defaultSimParams();
     }
 
     S.t2_year = Y_LAST; S.tab = 'overview'; render();
@@ -2712,6 +3046,7 @@
     document.getElementById('metaSub').textContent =
       DATA.meta.years[0] + '~' + DATA.meta.years[DATA.meta.years.length - 1] + ' · ' + schools.length + '개교 · 단위 ' + DATA.meta.unit + (DATA.meta.generated ? ' · ' + DATA.meta.generated.slice(0, 10) : '');
     if (LITE) document.getElementById('liteBadge').style.display = 'inline-block';
+    setMainVisual();                 // data-main 속성·--main 토큰 확정(부트 시 DOM 준비 후 재확인)
     initTheme();
     initShell();
     renderFilterbar();
