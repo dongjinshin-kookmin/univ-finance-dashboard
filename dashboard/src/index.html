@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>사립대학 교비회계 수지분석 대시보드</title>
+<title>교비회계 수지분석시스템</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
 <header class="topbar">
   <button class="hamburger" id="drawerToggle" aria-label="메뉴 열기">☰</button>
   <span class="brand-mark">KMU</span>
-  <span class="topbar-title">교비회계 수지분석</span>
+  <span class="topbar-title">교비회계 수지분석시스템</span>
 </header>
 
 <div class="scrim" id="scrim"></div>
@@ -21,16 +21,25 @@
 <aside class="sidebar" id="sidebar">
   <div class="brand">
     <span class="brand-mark sq">KMU</span>
-    <span class="brand-word">교비 수지분석</span>
+    <span class="brand-word">교비회계 수지분석시스템</span>
   </div>
 
-  <div class="workspace-card">
-    <span class="ws-ava sq">국</span>
-    <span class="ws-txt">
-      <span class="ws-1">Workspace</span>
-      <span class="ws-2">국민대학교</span>
-    </span>
-    <span class="ws-chev">⌄</span>
+  <div class="ws-selector" id="wsSelector">
+    <button class="workspace-card" id="workspaceBtn" type="button" aria-haspopup="listbox" aria-expanded="false" title="분석 대학 변경">
+      <span class="ws-ava sq" id="wsAva">국</span>
+      <span class="ws-txt">
+        <span class="ws-1">분석 대학</span>
+        <span class="ws-2" id="wsName">국민대학교</span>
+      </span>
+      <span class="ws-chev">▾</span>
+    </button>
+    <div class="ws-dropdown" id="wsDropdown" role="listbox" aria-label="분석 대학 선택" style="display:none">
+      <div class="wsd-search">
+        <span class="wsd-mag" aria-hidden="true">⌕</span>
+        <input id="wsSearch" type="text" placeholder="대학 검색…" autocomplete="off" aria-label="분석 대학 검색">
+      </div>
+      <div class="wsd-list" id="wsList"></div>
+    </div>
   </div>
 
   <div class="sidebar-search">
@@ -59,7 +68,7 @@
       <span class="uc-ava">R</span>
       <span class="uc-txt">
         <span class="uc-1">재정분석 리뷰어</span>
-        <span class="uc-2">교비회계 수지분석 v4</span>
+        <span class="uc-2">교비회계 수지분석시스템</span>
       </span>
     </div>
     <div class="footer-meta">
@@ -76,7 +85,7 @@
     <nav class="crumb" aria-label="위치">
       <span class="cr-nav" aria-hidden="true">‹</span>
       <span class="cr-nav" aria-hidden="true">›</span>
-      국민대학교 <span class="cr-sep">·</span> 교비회계 <span class="cr-sep">›</span> <b id="crumbTab"></b>
+      <span id="crumbMain">국민대학교</span> <span class="cr-sep">·</span> 교비회계 <span class="cr-sep">›</span> <b id="crumbTab"></b>
     </nav>
     <div class="stage-actions">
       <button class="action-btn" id="csvBtnTop" title="현재 필터 CSV 다운로드">

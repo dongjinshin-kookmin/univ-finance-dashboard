@@ -511,6 +511,8 @@
     var eb = document.getElementById('stageEyebrow'); if (eb) eb.textContent = t ? t.eyebrow : '';
     var st = document.getElementById('stageTitle'); if (st) st.textContent = t ? t.title : '';
     var cr = document.getElementById('crumbTab'); if (cr) cr.textContent = t ? t.title : '';
+    var crm = document.getElementById('crumbMain'); if (crm) crm.textContent = MAIN_NAME;
+    syncWorkspaceButton();
     var v = document.getElementById('view');
     v.innerHTML = '';
     ({ home: renderHome, overview: renderOverview, structure: renderStructure, accounts: renderAccounts, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, simulation: renderSimulation, data: renderData, settings: renderSettings })[S.tab](v);
@@ -782,7 +784,7 @@
       h('div', { class: 'home-hero-scrim' }),
       h('div', { class: 'home-hero-inner' }, [
         h('div', { class: 'hero-eyebrow' }, [eyebrowMark, eyebrowTxt]),
-        h('h1', { class: 'hero-title', text: '사립대학 교비회계 수지분석' }),
+        h('h1', { class: 'hero-title', text: '교비회계 수지분석시스템' }),
         h('p', { class: 'hero-sub', text:
           Y_FIRST + '~' + Y_LAST + ' · ' + schools.length + '개교 · 사학기관 재무·회계 특례규칙 기준' }),
         stats,
@@ -1121,7 +1123,7 @@
     var drop = h('div', { class: 'ss-dropdown' }); drop.style.display = 'none';
     searchWrap.appendChild(input); searchWrap.appendChild(drop);
     var hits = [], active = -1;
-    function cand(q) { var out = []; schools.forEach(function (s, i) { if (q && s.n.indexOf(q) < 0) return; out.push(i); }); return out.slice(0, 12); }
+    function cand(q) { var out = []; schools.forEach(function (s, i) { if (q && s.n.indexOf(q) < 0) return; out.push(i); }); return out; }
     function pick(i) { onPick(i); }
     // active 하이라이트만 갱신(옵션 DOM 재생성 없음). mouseenter가 draw()로 옵션을
     // 통째로 재생성하면, 커서 아래 옵션이 detach되어 곧이어 발생할 mousedown(선택)이
@@ -1907,7 +1909,7 @@
         if (q && schools[sid].n.indexOf(q) < 0) return;
         out.push(sid);
       });
-      return out.slice(0, 10);
+      return out;
     }
     function ssAdd(sid) {
       if (S.t4_schools.length >= 8) { alert(MAIN_NAME + ' 포함 최대 8개'); return; }
@@ -3309,6 +3311,7 @@
     var csvBtnTop = document.getElementById('csvBtnTop');
     if (csvBtnTop) csvBtnTop.addEventListener('click', downloadCSV);
     initGlobalSearch();
+    initWorkspace();
   }
 
   // 전역 대학 검색 (사이드바) → 선택 시 대학 비교 탭에 추가
@@ -3327,7 +3330,7 @@
         if (q && schools[sid].n.indexOf(q) < 0) return;
         out.push(sid);
       });
-      return out.slice(0, 12);
+      return out;
     }
     function pick(sid) {
       if (S.t4_schools.indexOf(sid) < 0) {
@@ -3362,6 +3365,85 @@
       else if (e.key === 'Enter') { e.preventDefault(); if (active >= 0 && hits[active] != null) pick(hits[active]); }
       else if (e.key === 'Escape') { drop.style.display = 'none'; }
     });
+  }
+
+  // ── 워크스페이스 셀렉터 (사이드바) — 메인 분석 대학 변경 ────
+  // 헤더 공통 영역. 집계필터(TYPE_SET) 부합 전체 대학을 스크롤 목록으로 표시(절단 없음),
+  // 검색 부분일치 필터. 선택 = 기본설정의 메인 변경과 동일(applySettings → 전 탭·F5 일관).
+  function syncWorkspaceButton() {
+    var nm = document.getElementById('wsName');
+    var av = document.getElementById('wsAva');
+    if (nm) nm.textContent = MAIN_NAME;
+    if (av) av.textContent = (MAIN_ID === KMU_ID) ? '국' : (MAIN_NAME ? MAIN_NAME.slice(0, 1) : '대');
+  }
+
+  function initWorkspace() {
+    var btn = document.getElementById('workspaceBtn');
+    var dropdown = document.getElementById('wsDropdown');
+    var search = document.getElementById('wsSearch');
+    var list = document.getElementById('wsList');
+    var selector = document.getElementById('wsSelector');
+    if (!btn || !dropdown || !search || !list) return;
+    var open = false, active = -1, hits = [];
+
+    // 집계필터 부합 전체 대학(가나다) — 현재 메인은 필터 밖이어도 항상 포함.
+    function scopeIds() {
+      var ids = [];
+      schools.forEach(function (s, i) { if (TYPE_SET.has(s.type) || i === MAIN_ID) ids.push(i); });
+      ids.sort(function (a, b) { return String(schools[a].n).localeCompare(String(schools[b].n), 'ko'); });
+      return ids;
+    }
+    function candidates(q) {
+      return scopeIds().filter(function (i) { return !q || schools[i].n.indexOf(q) >= 0; });
+    }
+    function hi() {
+      var kids = list.querySelectorAll('.wsd-opt');
+      for (var k = 0; k < kids.length; k++) kids[k].classList.toggle('active', k === active);
+    }
+    function scrollActive() { var el = list.querySelectorAll('.wsd-opt')[active]; if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' }); }
+    function draw() {
+      list.innerHTML = '';
+      if (!hits.length) { list.appendChild(h('div', { class: 'wsd-empty', text: '일치하는 대학이 없습니다' })); return; }
+      hits.forEach(function (sid, i) {
+        var cur = (sid === MAIN_ID);
+        var o = h('div', { class: 'wsd-opt' + (i === active ? ' active' : '') + (cur ? ' current' : '') + (sid === KMU_ID ? ' kmu' : ''), role: 'option',
+          html: '<i style="background:' + C.resolveColor(schoolColor(sid)) + '"></i>' +
+            '<span class="wsd-nm">' + schools[sid].n + (schools[sid].kmu ? ' ★' : '') + '</span>' +
+            '<span class="wsd-region">' + schools[sid].region + ' · ' + schools[sid].scale + '</span>' +
+            (cur ? '<span class="wsd-check">✓</span>' : '') });
+        o.addEventListener('mousedown', function (e) { e.preventDefault(); pick(sid); });
+        o.addEventListener('mouseenter', function () { active = i; hi(); });
+        list.appendChild(o);
+      });
+    }
+    function refr() { hits = candidates(search.value.trim()); active = -1; draw(); }
+    function openDrop() {
+      open = true; dropdown.style.display = 'block'; btn.setAttribute('aria-expanded', 'true');
+      search.value = ''; refr();
+      var idx = hits.indexOf(MAIN_ID);
+      if (idx >= 0) { active = idx; hi(); var cur = list.querySelector('.wsd-opt.current'); if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' }); }
+      setTimeout(function () { search.focus(); }, 0);
+    }
+    function closeDrop() { open = false; dropdown.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); }
+    function pick(sid) {
+      closeDrop();
+      if (sid === MAIN_ID) return;
+      var draft = JSON.parse(JSON.stringify(SETTINGS_STATE));
+      draft.mainSchoolName = schools[sid].n;
+      var res = applySettings(draft);   // 정규화(메인·경쟁 서로소)·파생전역·지속·refresh 1회
+      if (res.persisted) settingsToast('분석 대학을 ' + schools[sid].n + '(으)로 변경했습니다', 'ok');
+      else settingsToast(res.error || '세션에만 적용됩니다 — 내보내기로 백업하세요', 'warn');
+    }
+    btn.addEventListener('click', function (e) { e.stopPropagation(); if (open) closeDrop(); else openDrop(); });
+    search.addEventListener('input', refr);
+    search.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (hits.length) { active = (active + 1) % hits.length; hi(); scrollActive(); } }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (hits.length) { active = (active - 1 + hits.length) % hits.length; hi(); scrollActive(); } }
+      else if (e.key === 'Enter') { e.preventDefault(); if (active >= 0 && hits[active] != null) pick(hits[active]); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeDrop(); btn.focus(); }
+    });
+    document.addEventListener('click', function (e) { if (open && selector && !selector.contains(e.target)) closeDrop(); });
+    syncWorkspaceButton();
   }
 
   // ═══════════════════════════════════════════════════════
