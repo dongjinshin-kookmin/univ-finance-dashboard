@@ -1238,3 +1238,101 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 .settings-toast.show { opacity: 1; transform: translate(-50%, 0); }
 .settings-toast.ok { background: var(--good, #1f9d55); }
 .settings-toast.warn { background: var(--critical, #c0392b); }
+
+/* ══════════════════════════════════════════════════════════════
+   C7~C9 — 20년 시간축 관찰 뷰 (색은 등급 토큰만 · KMU Blue=국민대 전용)
+   ══════════════════════════════════════════════════════════════ */
+.clo-timeline { border-top: 3px solid var(--serious); }
+.clo-timeline .sim-beta-inline { position: static; display: inline-flex; margin: 2px 0 0; }
+
+/* 컨트롤 바 */
+.clo-tl-ctrl { display: flex; align-items: center; gap: 18px; margin: 14px 0 6px; flex-wrap: wrap; }
+.clo-tl-ctrl-l { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.clo-tl-yearlab { font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); }
+.clo-tl-yearval { font-size: 1.5rem; font-weight: 850; color: var(--serious); line-height: 1; font-variant-numeric: tabular-nums; min-width: 3.6ch; text-align: right; }
+.clo-tl-slider { flex: 1 1 320px; min-width: 220px; }
+.clo-tl-play { font-weight: 720; }
+.clo-timeline.playing .clo-tl-play { background: var(--warn-soft); color: var(--serious); }
+
+/* 헤드라인 */
+.clo-tl-headline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-size: 0.92rem; color: var(--text-secondary); margin: 4px 0 12px; }
+.clo-tl-hl-y { font-weight: 800; color: var(--text-primary); }
+.clo-tl-hl-n { font-size: 1.3rem; font-weight: 850; color: var(--serious); font-variant-numeric: tabular-nums; }
+.clo-tl-hl-sub { font-size: 0.82rem; color: var(--text-secondary); }
+.clo-tl-hl-badges { display: inline-flex; gap: 6px; }
+.clo-tl-hl-badges .grade-chip { font-style: normal; }
+.clo-tl-hl-range { font-size: 0.78rem; color: var(--muted); }
+
+/* 히어로 스택영역(인라인 SVG) */
+.clo-tl-hero { margin: 4px 0 10px; }
+.clo-hero-box { width: 100%; }
+.clo-hero-svg { width: 100%; height: 320px; display: block; overflow: visible; }
+.clo-hero-band { stroke: var(--surface-1); stroke-width: 0.5; }
+.clo-hero-band.g-stable { fill: var(--good); }
+.clo-hero-band.g-caution { fill: var(--warning); }
+.clo-hero-band.g-atrisk { fill: var(--serious); }
+.clo-hero-band.g-critical { fill: var(--critical); }
+.clo-hero-band.g-unrated { fill: var(--muted); opacity: 0.42; }
+.clo-hero-sigma { fill: var(--text-primary); opacity: 0.14; }
+.clo-hero-riskline { fill: none; stroke: var(--surface-1); stroke-width: 1.4; stroke-dasharray: 3 3; opacity: 0.7; }
+.clo-hero-inc { fill: var(--critical); opacity: 0.72; }
+/* 정직성 3구간 배경 */
+.clo-phase { opacity: 0.5; }
+.clo-phase-v { fill: transparent; }
+.clo-phase-p { fill: transparent; }
+.clo-phase-e { fill: transparent; }
+.clo-hatch-lo { stroke: var(--muted); stroke-width: 1; opacity: 0.22; }
+.clo-hatch-hi { stroke: var(--serious); stroke-width: 1.2; opacity: 0.4; }
+.clo-phase-div { stroke: var(--text-secondary); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.55; }
+.clo-phase-lab { fill: var(--muted); font-size: 10px; font-weight: 700; text-anchor: middle; }
+.clo-phase-lab.warn { fill: var(--serious); }
+.clo-hero-xlab { fill: var(--text-secondary); font-size: 11px; font-weight: 650; text-anchor: middle; }
+.clo-hero-ylab { fill: var(--muted); font-size: 10px; text-anchor: end; }
+.clo-hero-inclab { fill: var(--muted); font-size: 9.5px; font-weight: 650; }
+/* 플레이헤드 */
+.clo-tl-playhead { stroke: var(--text-primary); stroke-width: 1.6; }
+.clo-tl-phmark { fill: var(--text-primary); }
+.clo-tl-phyear { fill: var(--page); font-size: 10px; font-weight: 800; text-anchor: middle; }
+
+/* 권역 타일맵 */
+.clo-tilemap { margin: 12px 0 6px; }
+.clo-tm-group { margin-bottom: 14px; }
+.clo-tm-ghead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.clo-tm-gname { font-size: 0.82rem; font-weight: 760; color: var(--text-primary); }
+.clo-tm-cnt { font-size: 0.74rem; font-weight: 700; color: var(--serious); }
+.clo-tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(16px, 1fr)); gap: 3px; }
+.clo-tile {
+  position: relative; aspect-ratio: 1 / 1; border-radius: 3px; min-width: 0;
+  background: var(--muted); transition: background .18s ease;
+  display: flex; align-items: center; justify-content: center;
+}
+.clo-tile.g-stable { background: var(--good); }
+.clo-tile.g-caution { background: var(--warning); }
+.clo-tile.g-atrisk { background: var(--serious); }
+.clo-tile.g-critical { background: var(--critical); }
+.clo-tile.g-unrated { background: var(--muted); opacity: 0.4; }
+.clo-tile-mk { font-size: 8px; line-height: 1; color: #fff; text-shadow: 0 0 2px rgba(0,0,0,0.6); pointer-events: none; }
+.clo-tile.is-kmu { outline: 2px solid var(--kmu); outline-offset: 1px; z-index: 2; }
+.clo-tile.is-main { outline: 2px solid var(--text-primary); outline-offset: 1px; z-index: 2; }
+.clo-tile.is-comp { outline: 1.5px solid var(--text-secondary); outline-offset: 1px; z-index: 1; }
+.clo-tile.changed { animation: cloTilePulse 0.9s ease-out; box-shadow: 0 0 0 2px var(--text-primary); }
+@keyframes cloTilePulse {
+  0% { box-shadow: 0 0 0 3px var(--text-primary); transform: scale(1.28); }
+  100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
+}
+
+/* 캡션·정직성 미니칩 */
+.clo-tl-caption { font-size: 0.8rem; color: var(--text-secondary); margin: 10px 0 8px; }
+.clo-tl-caption b { color: var(--text-primary); font-weight: 740; }
+.clo-tl-honesty { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.clo-tl-hchip {
+  font-size: 0.72rem; font-weight: 650; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-2);
+}
+.clo-tl-hchip.band { border-color: color-mix(in srgb, var(--text-primary) 24%, transparent); }
+.clo-tl-hchip.extra { border-color: color-mix(in srgb, var(--serious) 34%, transparent); color: var(--serious); }
+
+@media (prefers-reduced-motion: reduce) {
+  .clo-tile { transition: none; }
+  .clo-tile.changed { animation: none; }
+}

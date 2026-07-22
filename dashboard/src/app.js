@@ -287,6 +287,7 @@
     sim_focus: null,                        // KPI 델타 포커스 연도(null=투영 종착연도)
     sim_mode: 'single',                     // 'single' 개별 대학 | 'cohort' 코호트 집계(C5)
     sim_closure_all: false,                 // 폐교위험 판정 학교표 전체 펼침(C6)
+    sim_tl_year: 2026,                       // 시간축 관찰 슬라이더 연도(C7~C9 · 재계산과 독립 판독 위치)
     sim_params: defaultSimParams(),
   };
 
@@ -2873,7 +2874,244 @@
     ]));
   }
 
+  // ═══════════════════════════════════════════════════════
+  //  C7~C9 — 20년 시간축 관찰 뷰 (설계 docs/시간축_시뮬레이션_설계 §3)
+  //  파라미터 변경(디바운스) 시 SIM.closureAggregateTimeline 1회 사전계산 →
+  //  슬라이더·재생은 S.sim_tl 인덱스 판독만(재계산 0). 히어로 스택영역은 인라인 SVG
+  //  자체구현(charts.js 불의존). 색은 등급 토큰만(신규 색 금지·KMU Blue=국민대 전용).
+  // ═══════════════════════════════════════════════════════
+  var TL_YEAR_MIN = 2026, TL_YEAR_MAX = 2045;   // 슬라이더 범위(base 2025는 히어로 좌측 앵커)
+  var GRADE_TONE = { stable: 'stable', caution: 'caution', atrisk: 'atrisk', critical: 'critical', unrated: 'unrated' };
+  var GRADE_SEV = { unrated: -1, stable: 0, caution: 1, atrisk: 2, critical: 3 };
+  function prefersReducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+  // §4 — 시간축 파라미터: base 2025 고정 · horizon 20(→2045) · 감축 온셋 = 사용자 t0(rStart 디커플)
+  function timelineParams(P) {
+    var q = {}; for (var k in P) q[k] = P[k];
+    q.t0 = 2025; q.horizon = 20; q.rStart = P.t0;
+    return q;
+  }
+  // 선택 연도 헤드라인 수치(설계 §3.2-1)
+  function tlHeadlineParts(tl, year) {
+    var yi = year - tl.years[0], py = tl.perYear[yi], prev = yi > 0 ? tl.perYear[yi - 1] : null;
+    return { N: py.atRiskOrWorse, K: prev ? (py.atRiskOrWorse - prev.atRiskOrWorse) : 0,
+             M: py.newAtRisk.count, crit: py.counts.critical, risk: py.counts.atrisk,
+             lo: py.atRiskRange[0], hi: py.atRiskRange[1] };
+  }
+
+  // ── 히어로 스택영역(인라인 SVG · 정직성 3구간 · σ(t) 확대밴드 · incidence · 플레이헤드) ──
+  function closureTimelineHero(tl, total) {
+    var years = tl.years, VBW = 920, VBH = 340, ML = 46, MR = 14, MT = 34, MB = 64;
+    var x0 = ML, x1 = VBW - MR, y0 = MT, y1 = VBH - MB, INCY0 = y1 + 10, INCH = 16;
+    function xF(yr) { return x0 + (yr - 2025) / 20 * (x1 - x0); }
+    function yF(c) { return y1 - c / total * (y1 - y0); }
+    var s = [];
+    s.push('<svg viewBox="0 0 ' + VBW + ' ' + VBH + '" class="clo-hero-svg" preserveAspectRatio="none" role="img" aria-label="2025~2045 연도별 등급 스택 영역">');
+    s.push('<defs>'
+      + '<pattern id="cloHatchLo" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" class="clo-hatch-lo"/></pattern>'
+      + '<pattern id="cloHatchHi" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" class="clo-hatch-hi"/></pattern>'
+      + '</defs>');
+    // 정직성 3구간 배경
+    s.push('<rect x="' + x0.toFixed(1) + '" y="' + y0 + '" width="' + (xF(2029.5) - x0).toFixed(1) + '" height="' + (y1 - y0) + '" class="clo-phase clo-phase-v"/>');
+    s.push('<rect x="' + xF(2029.5).toFixed(1) + '" y="' + y0 + '" width="' + (xF(2040.5) - xF(2029.5)).toFixed(1) + '" height="' + (y1 - y0) + '" class="clo-phase clo-phase-p"/>');
+    s.push('<rect x="' + xF(2029.5).toFixed(1) + '" y="' + y0 + '" width="' + (xF(2040.5) - xF(2029.5)).toFixed(1) + '" height="' + (y1 - y0) + '" fill="url(#cloHatchLo)"/>');
+    s.push('<rect x="' + xF(2040.5).toFixed(1) + '" y="' + y0 + '" width="' + (x1 - xF(2040.5)).toFixed(1) + '" height="' + (y1 - y0) + '" class="clo-phase clo-phase-e"/>');
+    s.push('<rect x="' + xF(2040.5).toFixed(1) + '" y="' + y0 + '" width="' + (x1 - xF(2040.5)).toFixed(1) + '" height="' + (y1 - y0) + '" fill="url(#cloHatchHi)"/>');
+    // 스택 밴드(아래→위: 미분류·안정·주의·위험·심각 적색 캡)
+    var order = ['unrated', 'stable', 'caution', 'atrisk', 'critical'];
+    var cum = years.map(function () { return 0; });
+    order.forEach(function (band) {
+      var top = [], bot = [];
+      years.forEach(function (yr, i) {
+        var b = cum[i], t = cum[i] + tl.perYear[i].counts[band];
+        bot.push(xF(yr).toFixed(1) + ',' + yF(b).toFixed(1));
+        top.push(xF(yr).toFixed(1) + ',' + yF(t).toFixed(1));
+        cum[i] = t;
+      });
+      s.push('<polygon points="' + top.concat(bot.reverse()).join(' ') + '" class="clo-hero-band g-' + band + '"/>');
+    });
+    // σ(t) 확대 위험경계밴드(CI 아님 · 관찰 보조)
+    var sTop = [], sBot = [];
+    years.forEach(function (yr, i) {
+      var py = tl.perYear[i];
+      sTop.push(xF(yr).toFixed(1) + ',' + yF(total - py.atRiskRange[0]).toFixed(1));
+      sBot.push(xF(yr).toFixed(1) + ',' + yF(total - py.atRiskRange[1]).toFixed(1));
+    });
+    s.push('<polygon points="' + sTop.concat(sBot.reverse()).join(' ') + '" class="clo-hero-sigma"/>');
+    var mid = years.map(function (yr, i) { return xF(yr).toFixed(1) + ',' + yF(total - tl.perYear[i].atRiskOrWorse).toFixed(1); }).join(' ');
+    s.push('<polyline points="' + mid + '" class="clo-hero-riskline"/>');
+    // 구간 경계 세로선(달력 고정 2029.5·2040.5)
+    [2029.5, 2040.5].forEach(function (bx) { s.push('<line x1="' + xF(bx).toFixed(1) + '" y1="' + y0 + '" x2="' + xF(bx).toFixed(1) + '" y2="' + y1 + '" class="clo-phase-div"/>'); });
+    // incidence 막대(신규 위험진입 · 2026+ 스케일)
+    var maxInc = 1; years.forEach(function (yr, i) { if (yr >= 2026) maxInc = Math.max(maxInc, tl.perYear[i].newAtRisk.count); });
+    var bw = (x1 - x0) / 20 * 0.46;
+    years.forEach(function (yr, i) {
+      if (yr < 2026) return;
+      var v = tl.perYear[i].newAtRisk.count; if (!v) return;
+      var hh = v / maxInc * INCH;
+      s.push('<rect x="' + (xF(yr) - bw / 2).toFixed(1) + '" y="' + (INCY0 + INCH - hh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hh.toFixed(1) + '" class="clo-hero-inc"><title>' + yr + '년 신규 위험진입 ' + v + '교</title></rect>');
+    });
+    // 축·구간 라벨
+    [2025, 2030, 2035, 2040, 2045].forEach(function (yr) { s.push('<text x="' + xF(yr).toFixed(1) + '" y="' + (VBH - 6) + '" class="clo-hero-xlab">' + yr + '</text>'); });
+    [0, 86, 172, 258, 344].forEach(function (c) { s.push('<text x="' + (x0 - 6) + '" y="' + (yF(c) + 3).toFixed(1) + '" class="clo-hero-ylab">' + c + '</text>'); });
+    s.push('<text x="' + ((x0 + xF(2029.5)) / 2).toFixed(1) + '" y="' + (y0 - 8) + '" class="clo-phase-lab">검증 26–29</text>');
+    s.push('<text x="' + ((xF(2029.5) + xF(2040.5)) / 2).toFixed(1) + '" y="' + (y0 - 8) + '" class="clo-phase-lab">투영 30–40</text>');
+    s.push('<text x="' + ((xF(2040.5) + x1) / 2).toFixed(1) + '" y="' + (y0 - 8) + '" class="clo-phase-lab warn">관찰용 외삽 41–45</text>');
+    s.push('<text x="' + (x0 + 2) + '" y="' + (INCY0 + INCH + 9) + '" class="clo-hero-inclab">위험 진입(신규)</text>');
+    // 플레이헤드
+    s.push('<line x1="0" y1="' + y0 + '" x2="0" y2="' + y1 + '" class="clo-tl-playhead"/>');
+    s.push('<rect class="clo-tl-phmark" x="0" y="' + (y0 - 2) + '" width="34" height="15" rx="3"/>');
+    s.push('<text class="clo-tl-phyear" x="0" y="' + (y0 + 9) + '"></text>');
+    s.push('</svg>');
+    var node = h('div', { class: 'clo-hero-box', html: s.join('') });
+    var svgEl = node.querySelector('svg');
+    var ph = svgEl.querySelector('.clo-tl-playhead'), phm = svgEl.querySelector('.clo-tl-phmark'), phy = svgEl.querySelector('.clo-tl-phyear');
+    function setYear(yr) {
+      var x = xF(yr);
+      ph.setAttribute('x1', x.toFixed(1)); ph.setAttribute('x2', x.toFixed(1));
+      var mx = Math.min(Math.max(x - 17, x0), x1 - 34);
+      phm.setAttribute('x', mx.toFixed(1));
+      phy.setAttribute('x', (mx + 17).toFixed(1)); phy.textContent = yr;
+    }
+    return { node: node, setYear: setYear };
+  }
+
+  // ── 권역 타일맵(1교=1타일 · 정적 정렬로 위험 프런티어 전진 · 등급변화 하이라이트) ──
+  function closureTilemap(tl) {
+    var y0 = tl.years[0];
+    var wrap = h('div', { class: 'clo-tilemap' });
+    var tiles = [], groups = [];
+    CLOSURE_REGION_ORDER.forEach(function (region) {
+      var members = tl.bySchool.filter(function (sc) { return (schools[sc.idx] && schools[sc.idx].region) === region; });
+      if (!members.length) return;
+      members.sort(function (a, b) {
+        var fa = a.firstAtRiskYear == null ? 9999 : a.firstAtRiskYear, fb = b.firstAtRiskYear == null ? 9999 : b.firstAtRiskYear;
+        if (fa !== fb) return fa - fb;
+        var da = a.depletionYear == null ? 9999 : a.depletionYear, db = b.depletionYear == null ? 9999 : b.depletionYear;
+        if (da !== db) return da - db;
+        return GRADE_SEV[b.grades[b.grades.length - 1]] - GRADE_SEV[a.grades[a.grades.length - 1]];
+      });
+      var grp = h('div', { class: 'clo-tm-group' });
+      var cntEl = h('span', { class: 'clo-tm-cnt' });
+      grp.appendChild(h('div', { class: 'clo-tm-ghead' }, [h('span', { class: 'clo-tm-gname', text: region + ' ' + members.length + '교' }), cntEl]));
+      var grid = h('div', { class: 'clo-tm-grid' }), gtiles = [];
+      members.forEach(function (sc) {
+        var sm = schools[sc.idx] || {};
+        var mk = (sc.idx === MAIN_ID || sc.idx === KMU_ID) ? '★' : (COMP_IDS.indexOf(sc.idx) >= 0 ? '◆' : '');
+        var el = h('div', { class: 'clo-tile', html: mk ? '<span class="clo-tile-mk">' + mk + '</span>' : '' });
+        el.__sc = sc; el.__sm = sm;
+        grid.appendChild(el); gtiles.push(el); tiles.push(el);
+      });
+      grp.appendChild(grid); wrap.appendChild(grp);
+      groups.push({ cntEl: cntEl, tiles: gtiles });
+    });
+    wrap.appendChild(closureLegend());
+    function baseCls(idx) {
+      return idx === KMU_ID ? ' is-kmu' : (idx === MAIN_ID ? ' is-main' : (COMP_IDS.indexOf(idx) >= 0 ? ' is-comp' : ''));
+    }
+    function setYear(yr) {
+      var yi = yr - y0;
+      tiles.forEach(function (el) {
+        var sc = el.__sc, g = sc.grades[yi], gp = yi > 0 ? sc.grades[yi - 1] : g;
+        el.className = 'clo-tile' + baseCls(sc.idx) + ' g-' + GRADE_TONE[g] + (GRADE_SEV[g] > GRADE_SEV[gp] ? ' changed' : '');
+        el.title = (el.__sm.n || '') + ' · ' + CLOSURE_GRADES[g].label + (sc.depletionYear != null ? ' · 소진 ' + sc.depletionYear + '년' : '');
+      });
+      groups.forEach(function (grp) {
+        var n = 0; grp.tiles.forEach(function (el) { if (GRADE_SEV[el.__sc.grades[yi]] >= GRADE_SEV.atrisk) n++; });
+        grp.cntEl.textContent = '폐교위험 ' + n + '교';
+      });
+    }
+    return { node: wrap, setYear: setYear };
+  }
+
+  // ── 시간축 관찰 섹션 조립(컨트롤 바 · 히어로 · 타일맵) — 파라미터당 사전계산 1회 ──
+  function buildTimelineSection(box, P) {
+    var tl;
+    try { tl = ENG.closureAggregateTimeline(SIMD, timelineParams(P), { meta: SIMD.meta, schools: schools, useCorpSupport: !!P.useCorpSupport }); }
+    catch (e) { box.appendChild(h('div', { class: 'card' }, [h('p', { class: 'hint', text: '시간축 계산 오류: ' + ((e && e.message) || e) })])); return; }
+    S.sim_tl = tl;
+    var total = 0; CLOSURE_STACK_ORDER.forEach(function (k) { total += tl.perYear[0].counts[k]; });
+    var year = S.sim_tl_year; if (year == null || year < TL_YEAR_MIN || year > TL_YEAR_MAX) year = TL_YEAR_MIN;
+
+    var card = h('div', { class: 'card sim-closure clo-timeline' });
+    card.appendChild(cardHead('outlook', 'var(--serious)', '20년 시간축 관찰 (2026~2045)', '이 조건이 이어질 때 위험/안정 대학이 20년에 걸쳐 어떻게 갈리는가 · 슬라이더/재생으로 천천히 관찰'));
+    card.appendChild(h('span', { class: 'pill warn sim-beta-inline', html: '<i></i>관찰용 외삽 — 통계적 예측 아님 · 4년 백테스트를 20년으로 확장(σ 시간확대)' }));
+
+    var yearLbl = h('span', { class: 'clo-tl-yearval', text: String(year) });
+    var slider = h('input', { type: 'range', min: TL_YEAR_MIN, max: TL_YEAR_MAX, step: 1, value: year, class: 'clo-tl-slider sim-slider', 'aria-label': '관찰 연도' });
+    var RM = prefersReducedMotion();
+    var playBtn = h('button', { class: 'chip clo-tl-play', text: '▶ 재생' });
+    card.appendChild(h('div', { class: 'clo-tl-ctrl' }, [
+      h('div', { class: 'clo-tl-ctrl-l' }, [h('span', { class: 'clo-tl-yearlab', text: '관찰 연도' }), yearLbl, RM ? null : playBtn]),
+      slider,
+    ]));
+    var headline = h('div', { class: 'clo-tl-headline' });
+    card.appendChild(headline);
+
+    var hero = closureTimelineHero(tl, total);
+    card.appendChild(h('div', { class: 'clo-tl-hero' }, [hero.node]));
+
+    card.appendChild(h('div', { class: 'clo-tl-caption', html: '<b>전국 ' + total + '개 대학 타일맵</b> — 1교=1타일 · 권역 그룹 · 등급색 · 직전 연도 대비 등급 악화 타일 강조(★ 본교 · ◆ 경쟁대학)' }));
+    var tm = closureTilemap(tl);
+    card.appendChild(tm.node);
+
+    card.appendChild(h('div', { class: 'clo-tl-honesty' }, [
+      h('span', { class: 'clo-tl-hchip band', text: 'σ(t) 확대 밴드 — CI 아님 · 관찰 보조 (밴드출처 ' + (tl.bandSrc === 'none' ? '없음' : '그룹/전역 중앙값') + ')' }),
+      h('span', { class: 'clo-tl-hchip extra', text: '2041+ 관찰용 외삽 — 인구추계 데이터 종료(마지막값 유지)' }),
+    ]));
+
+    function repaint(y) {
+      year = y; S.sim_tl_year = y; yearLbl.textContent = String(y);
+      var p = tlHeadlineParts(tl, y);
+      var kTxt = p.K > 0 ? '+' + p.K : (p.K < 0 ? String(p.K) : '±0');
+      headline.innerHTML =
+        '<span class="clo-tl-hl-y">' + y + '년</span> · 폐교위험 <b class="clo-tl-hl-n">' + p.N + '</b>개교'
+        + ' <span class="clo-tl-hl-sub">(전년 대비 ' + kTxt + ' · 신규 진입 ' + p.M + ')</span>'
+        + ' <span class="clo-tl-hl-badges"><span class="grade-chip g-critical">심각 ' + p.crit + '</span>'
+        + '<span class="grade-chip g-atrisk">위험 ' + p.risk + '</span></span>'
+        + ' <span class="clo-tl-hl-range">경계밴드 ' + p.lo + '~' + p.hi + '개교</span>';
+      hero.setYear(y); tm.setYear(y);
+    }
+    repaint(year);
+
+    // 슬라이더 = 사전계산 판독만(재계산 0)
+    slider.addEventListener('input', function () { stopPlay(); repaint(parseInt(this.value, 10)); });
+
+    // 재생(raf · reduced-motion이면 버튼 미노출) — 2.6년/초(20년 ≈ 8초 "천천히")
+    var playing = false, rafId = null, acc = 0, lastT = 0, SPEED = 2.6;
+    var RAF = window.requestAnimationFrame || function (f) { return setTimeout(function () { f(Date.now()); }, 16); };
+    var CAF = window.cancelAnimationFrame || clearTimeout;
+    function stopPlay() {
+      if (!playing) return; playing = false;
+      if (rafId) { CAF(rafId); rafId = null; }
+      if (!RM) playBtn.textContent = '▶ 재생';
+      card.classList.remove('playing');
+    }
+    function tick(ts) {
+      if (!playing) return;
+      if (!lastT) lastT = ts;
+      var dt = (ts - lastT) / 1000; lastT = ts; acc += dt * SPEED;
+      if (acc >= 1) {
+        var step = Math.floor(acc); acc -= step;
+        var ny = year + step;
+        if (ny >= TL_YEAR_MAX) { slider.value = TL_YEAR_MAX; repaint(TL_YEAR_MAX); stopPlay(); return; }
+        slider.value = ny; repaint(ny);
+      }
+      rafId = RAF(tick);
+    }
+    if (!RM) playBtn.addEventListener('click', function () {
+      if (playing) { stopPlay(); return; }
+      if (year >= TL_YEAR_MAX) { slider.value = TL_YEAR_MIN; repaint(TL_YEAR_MIN); }
+      playing = true; lastT = 0; acc = 0; playBtn.textContent = '⏸ 일시정지'; card.classList.add('playing');
+      rafId = RAF(tick);
+    });
+
+    box.appendChild(card);
+  }
+
   function buildSimAggregate(box, P) {
+    buildTimelineSection(box, P);   // C7~C9 — 20년 시간축 관찰 (설계 §3, 정보위계 최상단 히어로)
     buildClosureAggPanel(box, P);   // C6 — 폐교위험 판정 (전국 344교 · §6 정보위계, 필터 무관)
     var grpLabel = SIM_AGG_LABEL[SIM_AGG_POP] || '기준군';
     box.appendChild(h('div', { class: 'sim-sep-h', html: '<span>코호트 수입·수지 집계 (' + grpLabel + ' 기준군)</span>' }));
@@ -3071,7 +3309,8 @@
     ['이 판정은 재정 존속위험이며 폐교 확정이 아닙니다 — 폐교는 비리·분규·법인구제 등 재정 외 요인이 개입합니다.',
      '비리·분규·법인 추가지원은 미반영(법인지원은 선택 토글 · 데이터 커버리지 60.5%, 폐교교 전부 결측).',
      '전문대·사이버·대학원대는 시나리오 투영 미검증 — 관측 스톡 기반 등급만 유효(투영은 베타).',
-     '표본 폐교대학 N=4~6 — 통계적 증명이 아닌 임계값 보정·정합성 점검으로 해석해야 합니다.'].forEach(function (t) { ul.appendChild(h('li', { text: t })); });
+     '표본 폐교대학 N=4~6 — 통계적 증명이 아닌 임계값 보정·정합성 점검으로 해석해야 합니다.',
+     '20년 지평(2026~2045)은 관찰용 확장입니다 — 백테스트 검증은 4년(≈2029)까지이며, 2030~2040은 인구추계 실재 구간(투영), 2041~2045는 데이터 종료 후 기계적 외삽(관찰용)입니다. σ(t) 확대 밴드는 통계적 CI가 아니라 오차 누적을 시각화한 관찰 보조 표시이며, 2041+ 인구드리프트는 마지막값으로 동결됩니다.'].forEach(function (t) { ul.appendChild(h('li', { text: t })); });
     card.appendChild(ul);
     return card;
   }
@@ -3570,7 +3809,24 @@
       check('폐교판정 패널 렌더(헤드라인 수치 + 등급칩)',
         document.querySelectorAll('#view .clo-headline .chn-n').length > 0 &&
         document.querySelectorAll('#view .grade-chip').length > 0);
-      S.sim_mode = 'single'; S.sim_params = defaultSimParams();
+
+      // 12.5) 시간축 관찰(C7~C9) — 사전계산·회귀·슬라이더 판독·스택영역·타일맵
+      var tlAgg = ENG.closureAggregateTimeline(SIMD, timelineParams(defaultSimParams()), { meta: SIMD.meta, schools: schools });
+      check('시간축 base 회귀(2025 위험+=38 · 창 2025~2045)',
+        tlAgg.years[0] === 2025 && tlAgg.years[tlAgg.years.length - 1] === 2045 &&
+        tlAgg.perYear[0].atRiskOrWorse === 38 && tlAgg.bySchool.length === schools.length);
+      var tlHero = document.querySelectorAll('#view .clo-timeline .clo-hero-band').length;
+      var tlTiles = document.querySelectorAll('#view .clo-timeline .clo-tile').length;
+      check('시간축 히어로 스택(5밴드) + 타일맵(' + tlTiles + '타일=' + schools.length + ')',
+        tlHero === 5 && tlTiles === schools.length &&
+        document.querySelectorAll('#view .clo-tl-slider').length > 0 &&
+        document.querySelectorAll('#view .clo-tl-playhead').length > 0);
+      // 슬라이더 판독(재계산 0) — 값 변경 → 헤드라인 연도 갱신
+      var tlSlider = document.querySelector('#view .clo-tl-slider');
+      tlSlider.value = 2045; tlSlider.dispatchEvent(new Event('input'));
+      check('시간축 슬라이더 판독 갱신(2045 헤드라인)',
+        /2045년/.test(document.querySelector('#view .clo-tl-headline').textContent));
+      S.sim_mode = 'single'; S.sim_params = defaultSimParams(); S.sim_tl_year = 2026;
     }
 
     S.t2_year = Y_LAST; S.tab = 'overview'; render();
