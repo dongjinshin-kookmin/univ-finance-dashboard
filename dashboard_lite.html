@@ -1344,6 +1344,31 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
   .clo-tile.changed { animation: none; }
 }
 
+/* ── 항목 평이 설명 서브텍스트 (v10.3) ─────────────────────────
+   비전문가용 "이 항목이 무엇을 보여주는가" 한 줄. 기술적 card-sub보다
+   약간 진한 색(가독)·정상 자간, 제목 바로 아래. 모바일 자연 줄바꿈. */
+.card-plain,
+.sec-desc {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  max-width: 68ch;
+}
+/* 카드 헤더 안(제목 아래) — sub와의 간격 */
+.card-head .ch-txt .card-plain { margin: 4px 0 0; }
+.card-head .ch-txt .card-plain + .card-sub { margin-top: 3px; }
+/* h3 직접 렌더 카드(시계열·비교 등)에서 h3/card-sub 아래 독립 줄 */
+.card > .sec-desc { margin: 4px 0 6px; }
+.card > h3 + .sec-desc { margin-top: 6px; }
+.card > .card-sub + .sec-desc { margin-top: 2px; }
+/* 분석 패널(수지 구조) 등 촘촘한 카드에서는 살짝 축소 */
+.t2-panel .card-plain { font-size: 0.78rem; margin-top: 3px; }
+/* 다크 모드 가독 보정 */
+:root[data-theme="dark"] .card-plain,
+:root[data-theme="dark"] .sec-desc { color: var(--text-secondary); }
+
 </style>
 </head>
 <body>
@@ -3864,13 +3889,20 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       '<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" style="fill:var(--surface-3)"/>' + wedge +
       '<circle cx="9" cy="9" r="7.5" fill="none" style="stroke:var(--border-strong)" stroke-width="1"/></svg>' });
   }
-  // 카드 헤더 (스쿼클 아이콘 + 제목/부제)
-  function cardHead(iconName, colorVar, title, sub) {
+  // 카드 헤더 (스쿼클 아이콘 + 제목/부제[기술]/평이설명[plain])
+  // plain = 비전문가용 "이 항목이 무엇을 보여주는가" 한 줄(제목 바로 아래, sub보다 위)
+  function cardHead(iconName, colorVar, title, sub, plain) {
     return h('div', { class: 'card-head' }, [
       iconTile('ch-ico', iconName, colorVar),
-      h('div', { class: 'ch-txt' }, [h('h3', { text: title }), sub ? h('div', { class: 'card-sub', text: sub }) : null]),
+      h('div', { class: 'ch-txt' }, [
+        h('h3', { text: title }),
+        plain ? h('div', { class: 'card-plain', text: plain }) : null,
+        sub ? h('div', { class: 'card-sub', text: sub }) : null,
+      ]),
     ]);
   }
+  // 평이 설명 줄(제목이 h3 직접 렌더인 카드용) — 카드 헤더 아래 append
+  function pdesc(text) { return h('div', { class: 'sec-desc', text: text }); }
 
   // ═══════════════════════════════════════════════════════
   //  필터바
@@ -4317,7 +4349,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var glab = BENCH_LABEL[t1_bench];
     var head = h('div', { class: 'card' }, [
       cardHead('overview', 'var(--kmu)', '핵심 지표 — ' + MAIN_NAME + ' ' + yr + '년',
-        '값 · Δ전년(개선 초록/악화 빨강) · 기준군 백분위 · 미니 추이 · 중앙값 대비 인사이트. 카드 클릭 → 시계열'),
+        '값 · Δ전년(개선 초록/악화 빨강) · 기준군 백분위 · 미니 추이 · 중앙값 대비 인사이트. 카드 클릭 → 시계열',
+        '이 대학의 재정 상태를 한눈에 보여주는 핵심 비율들을 모았다. 카드마다 올해 값과 작년 대비 변화, 비슷한 대학들 사이에서의 위치를 함께 보여준다.'),
     ]);
     head.appendChild(h('div', { class: 'row-controls', style: 'margin-top:12px' }, [
       ctrl('비교 기준군', benchToggle(t1_bench, function (k) { t1_bench = k; render(); })),
@@ -4422,20 +4455,23 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 
     // 운영수지 시계열 + 밴드 (선택 기준군)
     var row2 = h('div', { class: 'grid c2' });
-    var opCard = h('div', { class: 'card' }, [cardHead('timeseries', 'var(--series-2)', '운영수지 추이', MAIN_NAME + ' 실선 · ' + glab + ' p25~p75 밴드 · p50 점선')]);
+    var opCard = h('div', { class: 'card' }, [cardHead('timeseries', 'var(--series-2)', '운영수지 추이', MAIN_NAME + ' 실선 · ' + glab + ' p25~p75 밴드 · p50 점선',
+      '한 해 벌어들인 돈에서 쓴 돈을 뺀 결과(흑자/적자)가 해마다 어떻게 변했는지 보여준다. 음영 띠는 비슷한 대학들의 중간 범위로, 실선이 띠 위에 있으면 평균보다 여유롭다는 뜻.')]);
     var opBox = chartBox(280); opCard.appendChild(opBox);
     opCard.appendChild(bandLegend(glab));
     row2.appendChild(opCard);
 
     // 등록금의존율 분포 (선택 기준군)
-    var distCard = h('div', { class: 'card' }, [cardHead('compare', 'var(--series-6)', '등록금의존율 분포 — ' + yr + '년', glab + ' 히스토그램 · ' + MAIN_NAME + ' 위치 표시')]);
+    var distCard = h('div', { class: 'card' }, [cardHead('compare', 'var(--series-6)', '등록금의존율 분포 — ' + yr + '년', glab + ' 히스토그램 · ' + MAIN_NAME + ' 위치 표시',
+      '전체 수입에서 등록금이 차지하는 비중이 대학마다 얼마나 다른지 분포로 보여주고, 그 안에서 이 대학이 어디쯤 있는지 표시한다. 비중이 높을수록 등록금에 대한 의존이 크다는 뜻.')]);
     var distBox = chartBox(260); distCard.appendChild(distBox);
     row2.appendChild(distCard);
     v.appendChild(row2);
     v.appendChild(h('div', { class: 'spacer-v' }));
 
     // 부문 스택바
-    var secCard = h('div', { class: 'card' }, [cardHead('structure', 'var(--series-3)', '수입·지출 부문 구성 — ' + MAIN_NAME + ' ' + yr + '년', '운영 · 자산/부채 · 기본금 · 이월')]);
+    var secCard = h('div', { class: 'card' }, [cardHead('structure', 'var(--series-3)', '수입·지출 부문 구성 — ' + MAIN_NAME + ' ' + yr + '년', '운영 · 자산/부채 · 기본금 · 이월',
+      '한 해 들어온 돈과 나간 돈이 각각 어떤 큰 덩어리로 이뤄지는지 막대로 보여준다. 등록금·인건비 같은 일상 운영과 건물·투자 같은 자산·부채 항목을 구분해서 볼 수 있다.')]);
     var secBox = chartBox(150); secCard.appendChild(secBox);
     secCard.appendChild(sectionLegend());
     v.appendChild(secCard);
@@ -4651,6 +4687,9 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     ]);
 
     var card = h('div', { class: 'card t2-treecard' }, [head]);
+    card.appendChild(pdesc(side === 'in'
+      ? '등록금·국고보조 등 돈이 어디서 들어오는지 큰 분류부터 세부 항목까지 펼쳐 본다. 행을 누르면 오른쪽에 그 항목의 상세 분석이 열린다.'
+      : '인건비·장학금·관리비 등 돈이 어디에 쓰이는지 큰 분류부터 세부 항목까지 펼쳐 본다. 행을 누르면 오른쪽에 그 항목의 상세 분석이 열린다.'));
     var tree = h('div', { class: 'tree' });
     tree.appendChild(treeHeader());
     rootsOf(side).forEach(function (root) { appendTreeNode(tree, side, root, sid, yr, total || 1, 0, sideColor); });
@@ -4735,6 +4774,7 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
           ((rate >= 0 ? '▲' : '▼') + ' ' + F.pct(Math.abs(rate), 1) + ' <span class="dp-vs">vs ' + (yr - 1) + '</span>') }),
       ]),
       h('div', { class: 'ap-sub', text: (share == null ? schools[sid].n : totWordOf(side) + ' 대비 ' + F.pct(share, 1) + ' · ' + schools[sid].n + ' · ' + yr + '년') }),
+      pdesc('트리에서 고른 계정을 아래 카드들에서 다각도로 분석한다. 맨 위는 올해 금액과 작년 대비 증감, 그리고 9년간의 흐름 요약.'),
       spark,
     ]);
     C.sparkline(spark, { points: YEARS.map(function (y) { return [y, gv(side, code, sid, y)]; }),
@@ -4763,7 +4803,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       ]));
     });
     return h('div', { class: 'card' }, [
-      cardHead('structure', 'var(--series-4)', '포지션 래더', '상위 계층 대비 구성비 · 단계 클릭 시 이동'),
+      cardHead('structure', 'var(--series-4)', '포지션 래더', '상위 계층 대비 구성비 · 단계 클릭 시 이동',
+        '고른 계정이 한 단계 위 항목, 또 그 위 부문, 전체 총계 안에서 각각 몇 %를 차지하는지 계단식으로 보여준다.'),
       body,
     ]);
   }
@@ -4777,7 +4818,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     ]);
     var card = h('div', { class: 'card' }, [
       cardHead('timeseries', 'var(--series-2)', '9개년 추이 — ' + ACC[side][code].name,
-        mode === 'share' ? (schools[sid].n + ' 실선 · 모집단 p25~p75 밴드 · p50 점선') : (schools[sid].n + ' 실선 · 모집단 중앙값 점선')),
+        mode === 'share' ? (schools[sid].n + ' 실선 · 모집단 p25~p75 밴드 · p50 점선') : (schools[sid].n + ' 실선 · 모집단 중앙값 점선'),
+        '이 계정이 9년 동안 늘었는지 줄었는지 보여준다. "절대액"은 금액 자체, "구성비"는 전체에서 차지하는 비중의 변화로, 다른 대학들과 견줘 볼 수 있다.'),
       toggle,
     ]);
     var box = chartBox(220); card.appendChild(box);
@@ -4874,7 +4916,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       ]));
     });
     return h('div', { class: 'card' }, [
-      cardHead('compare', 'var(--series-6)', '기준군 벤치마크', totWordOf(side) + ' 대비 구성비 백분위 · 전국·수도권·경쟁 · 중립 표기'),
+      cardHead('compare', 'var(--series-6)', '기준군 벤치마크', totWordOf(side) + ' 대비 구성비 백분위 · 전국·수도권·경쟁 · 중립 표기',
+        '이 계정의 비중이 전국·수도권·경쟁대학과 비교해 높은 편인지 낮은 편인지 보여준다. 막대가 오른쪽일수록 그 집단 안에서 비중이 큰 쪽에 속한다.'),
       body,
     ]);
   }
@@ -4890,7 +4933,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var n = vals.length;
     var pctile = (n > 1) ? vals.filter(function (x) { return x < per; }).length / (n - 1) : null;
     return h('div', { class: 'card' }, [
-      cardHead('users', 'var(--series-5)', '학생 1인당', schools[sid].scale + ' 집단 · 재학생 ' + F.intComma(enr) + '명'),
+      cardHead('users', 'var(--series-5)', '학생 1인당', schools[sid].scale + ' 집단 · 재학생 ' + F.intComma(enr) + '명',
+        '이 계정 금액을 재학생 수로 나눠 학생 한 명당 얼마인지로 환산했다. 규모가 비슷한 대학들과 1인당 기준으로 비교한다.'),
       h('div', { class: 'per-ban' }, [h('span', { class: 'per-val', text: F.krw(per) }), h('span', { class: 'per-unit', text: '/ 학생 1인' })]),
       h('div', { class: 'meter-row' }, [h('span', { class: 'meter-lab', text: '같은 규모 백분위' }), barMeter(pctile, 'var(--series-5)'),
         h('span', { class: 'meter-val', style: 'color:var(--series-5)', text: pctile == null ? '—' : F.percentileLabel(pctile) })]),
@@ -4922,7 +4966,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       ]));
     }
     body.appendChild(h('div', { class: 'footnote', html: '<b>경직성</b> = 매년 일정하게 발생(CV&lt;0.15) · <b>변동성</b> CV&gt;0.4' }));
-    return h('div', { class: 'card' }, [cardHead('data', 'var(--series-8)', '성격 진단', '성장 기여도 · 변동성'), body]);
+    return h('div', { class: 'card' }, [cardHead('data', 'var(--series-8)', '성격 진단', '성장 기여도 · 변동성',
+      '이 계정이 최근 1년 총액 증가에 얼마나 기여했는지, 그리고 해마다 금액이 들쭉날쭉한지(변동성) 아니면 매년 일정한지(경직성)를 진단한다.'), body]);
   }
 
   // G — 유사 대학 스니펫 (같은 규모+권역, 부족 시 규모만)
@@ -4951,7 +4996,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     arr.slice(Math.max(3, arr.length - 3)).forEach(function (r) { tb.appendChild(row(r, (arr.indexOf(r) + 1) + '위')); });
     body.appendChild(tb);
     return h('div', { class: 'card' }, [
-      cardHead('overview', 'var(--series-3)', '유사 대학 스니펫', groupLabel + ' · 구성비 상·하위 (n=' + arr.length + ')'),
+      cardHead('overview', 'var(--series-3)', '유사 대학 스니펫', groupLabel + ' · 구성비 상·하위 (n=' + arr.length + ')',
+        '규모·권역이 비슷한 대학들 사이에서 이 계정의 비중 순위를 보여준다. 상위·하위 대학과 나란히 놓아 우리 대학 위치를 가늠한다.'),
       h('div', { class: 'tbl-wrap' }, [body]),
     ]);
   }
@@ -5091,7 +5137,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 
     // 카드 1
     var c1 = h('div', { class: 'card' }, [cardHead('compare', 'var(--series-6)', '전국 대비 편차 Top 5',
-      '전국 기준군 구성비 백분위가 극단(상위/하위 15% 이내) · 구성비 1%↑')]);
+      '전국 기준군 구성비 백분위가 극단(상위/하위 15% 이내) · 구성비 1%↑',
+      '전국 평균과 유난히 다른(아주 높거나 아주 낮은) 계정을 추려 보여준다. 우리 대학만의 특이한 수입·지출 구조를 빠르게 찾을 수 있다.')]);
     var l1 = h('div', { class: 'ins-list' });
     if (!dev.length) l1.appendChild(emptyRow('극단 편차 계정이 없습니다.'));
     dev.forEach(function (x) {
@@ -5104,7 +5151,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 
     // 카드 2
     var c2 = h('div', { class: 'card' }, [cardHead('timeseries', 'var(--series-2)', '급증·급감 Top 5',
-      '전년(' + (yr - 1) + '→' + yr + ') 절대 증감액 · 구성비 1%↑')]);
+      '전년(' + (yr - 1) + '→' + yr + ') 절대 증감액 · 구성비 1%↑',
+      '작년보다 금액이 가장 크게 늘거나 줄어든 계정을 보여준다. 최근 재정 변화를 무엇이 이끌었는지 알 수 있다.')]);
     var l2 = h('div', { class: 'ins-list' });
     if (!jump.length) l2.appendChild(emptyRow('증감 데이터가 없습니다.'));
     jump.forEach(function (m) {
@@ -5114,7 +5162,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 
     // 카드 3
     var c3 = h('div', { class: 'card' }, [cardHead('data', 'var(--series-8)', '변동성 주의',
-      '9개년 YoY 변동계수(CV) 상위 · 구성비 1%↑')]);
+      '9개년 YoY 변동계수(CV) 상위 · 구성비 1%↑',
+      '해마다 금액이 가장 심하게 오르내린 계정을 보여준다. 예측이 어렵거나 관리가 필요한 항목을 짚어 준다.')]);
     var l3 = h('div', { class: 'ins-list' });
     if (!vol.length) l3.appendChild(emptyRow('변동성 계정이 없습니다.'));
     vol.forEach(function (x) {
@@ -5193,7 +5242,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var card = h('div', { class: 'card' }, [
       cardHead('accounts', sideColor, '전 계정 분석 매트릭스 — ' + schools[sid].n + ' · ' + yr + '년 ' + accSideWord(side),
         '계층 들여쓰기 · 금액/구성비/전년비 · 9개년 스파크라인 · 기준군 백분위 3종(전국·수도권·경쟁 구성비 대비, 상위%·hover 중앙값) · 학생 1인당 · 성격(CV). 행 클릭 → 수지 구조 심층 분석'
-        + (hiddenZero && !S.t8_zero ? ' · 0원 ' + hiddenZero + '개 숨김' : '')),
+        + (hiddenZero && !S.t8_zero ? ' · 0원 ' + hiddenZero + '개 숨김' : ''),
+        '이 대학의 모든 수입/지출 계정을 한 표에 모아 금액·비중·증감·9년 흐름·다른 대학 대비 위치·학생 1인당·성격을 한 줄에서 비교한다. 행을 누르면 그 계정의 상세 분석으로 이동한다.'),
     ]);
     card.appendChild(h('div', { class: 'tbl-wrap acc-wrap' }, [tbl]));
     if (!shown) card.appendChild(h('p', { class: 'hint', text: '표시할 계정이 없습니다. (0원 계정 표시를 켜보세요)' }));
@@ -5268,6 +5318,7 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var mainCard = h('div', { class: 'card' }, [
       h('h3', { text: title + ' — ' + MAIN_NAME + ' vs 기준군' }),
       h('div', { class: 'card-sub', text: MAIN_NAME + ' 실선 · 전국 p25~p75 밴드·중앙값 · 수도권·경쟁 중앙값 점선 · 범례 클릭으로 기준군 on/off · 이벤트 음영' }),
+      pdesc('고른 지표 하나가 우리 대학에서 9년간 어떻게 변했는지를, 전국·수도권·경쟁대학의 중간값과 나란히 보여준다. 범례를 눌러 비교 대상을 켜고 끌 수 있다.'),
     ]);
     var mainBox = chartBox(320); mainCard.appendChild(mainBox);
     mainCard.appendChild(tsBenchLegend());
@@ -5277,7 +5328,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     C.line(mainBox, { height: 320, series: series, band: band, events: events, xTicks: yrs, yFmt: yFmt, tipFmt: tipFmt, yZero: fmt === 'krw' });
 
     // Small multiples (KPI 10)
-    var smCard = h('div', { class: 'card' }, [h('h3', { text: 'KPI Small Multiples — ' + MAIN_NAME + ' ' + S.y0 + '~' + S.y1 }), h('div', { class: 'card-sub', text: '10개 지표 동시 조망 · 클릭하면 위 차트에 로드' })]);
+    var smCard = h('div', { class: 'card' }, [h('h3', { text: 'KPI Small Multiples — ' + MAIN_NAME + ' ' + S.y0 + '~' + S.y1 }), h('div', { class: 'card-sub', text: '10개 지표 동시 조망 · 클릭하면 위 차트에 로드' }),
+      pdesc('핵심 지표 10개의 최근 흐름을 작은 그래프로 한 번에 훑어본다. 하나를 누르면 위 큰 차트에서 자세히 볼 수 있다.')]);
     var sm = h('div', { class: 'small-mult' });
     KPI_KEYS.forEach(function (k) {
       var meta = KPI_META[k];
@@ -5393,7 +5445,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var yrs = YEARS.filter(function (y) { return y >= S.y0 && y <= S.y1; });
     // 라인 비교
     var meta = KPI_META[S.t4_metric];
-    var lineCard = h('div', { class: 'card' }, [h('h3', { text: meta.label + ' — 대학 비교' }), h('div', { class: 'card-sub', text: MAIN_NAME + ' 굵은 강조선' + (meta.fmt === 'pct' ? ' · 전국·수도권 중앙값 기준선' : '') })]);
+    var lineCard = h('div', { class: 'card' }, [h('h3', { text: meta.label + ' — 대학 비교' }), h('div', { class: 'card-sub', text: MAIN_NAME + ' 굵은 강조선' + (meta.fmt === 'pct' ? ' · 전국·수도권 중앙값 기준선' : '') }),
+      pdesc('고른 지표 하나를 우리 대학과 선택한 경쟁대학들이 시간에 따라 어떻게 달라졌는지 한 그래프에서 비교한다. 굵은 선이 우리 대학.')]);
     var lineBox = chartBox(320); lineCard.appendChild(lineBox);
     var series = S.t4_schools.map(function (sid) {
       return { name: schools[sid].n, color: schoolColor(sid), emphasize: schoolEmphasis(sid), label: schoolEmphasis(sid) ? MAIN_NAME : null, points: yrs.map(function (y) { return [y, kv(S.t4_metric, sid, y)]; }) };
@@ -5420,6 +5473,7 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var scCard = h('div', { class: 'card' }, [
       h('h3', { text: '산점도 — ' + S.y1 + '년' }),
       h('div', { class: 'card-sub', text: MAIN_NAME + ' 강조 · 선택 대학 색상 · 그 외 모집단 회색' }),
+      pdesc('두 지표를 가로·세로축에 놓고 대학들을 점으로 흩뿌린다. 두 지표 사이 관계와 그 안에서 우리 대학의 자리를 함께 볼 수 있다.'),
       h('div', { class: 'row-controls' }, [ctrl('X축', axisSel(S.t4_x, function (v2) { S.t4_x = v2; })), ctrl('Y축', axisSel(S.t4_y, function (v2) { S.t4_y = v2; }))]),
     ]);
     var scBox = chartBox(360); scCard.appendChild(scBox);
@@ -5480,6 +5534,7 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var card = h('div', { class: 'card' }, [
       h('h3', { text: '랭킹 — ' + meta.label + ' (' + yr + '년, 현재 필터 모집단)' }),
       h('div', { class: 'card-sub', text: '헤더 클릭 정렬 · ' + MAIN_NAME + ' 행 강조 · 백분위(지표 방향 반영)' }),
+      pdesc('현재 필터에 걸린 대학들을 고른 지표 기준으로 줄 세운 표. 우리 대학이 전체에서 몇 번째쯤인지 순위와 백분위로 확인한다.'),
     ]);
     var tbl = h('table', { class: 'data' });
     var metricOpts = KPI_KEYS;
@@ -5521,7 +5576,7 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
   // ── P2β 공유 — 기준군(전국·수도권·경쟁) 중앙값 요약행 ─────────
   // valueFn(sid,year)->num|null. fmt: 'pct'|'krw' 또는 (x)->string.
   // 백분위 미터 색은 --main(분석 주체) — 파랑(국민대 엔티티)과 무관(§5).
-  function benchMedianCard(icon, iccol, title, sub, mainSid, valueFn, fmt, year) {
+  function benchMedianCard(icon, iccol, title, sub, mainSid, valueFn, fmt, year, plain) {
     function vfmt(x) { return x == null || isNaN(x) ? '—' : (typeof fmt === 'function' ? fmt(x) : F.byFmt(x, fmt)); }
     function vdelta(x) { if (x == null || isNaN(x)) return '—'; return (x >= 0 ? '+' : '') + (typeof fmt === 'function' ? fmt(x) : F.byFmt(x, fmt)); }
     var mainVal = valueFn(mainSid, year);
@@ -5545,7 +5600,7 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       ]));
     });
     return h('div', { class: 'card' }, [
-      cardHead(icon, iccol, title, sub + ' · 본교 ' + MAIN_NAME + ' ' + vfmt(mainVal)),
+      cardHead(icon, iccol, title, sub + ' · 본교 ' + MAIN_NAME + ' ' + vfmt(mainVal), plain),
       body,
     ]);
   }
@@ -5579,13 +5634,15 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     // ── 0) 기준군 요약행 — 위기스코어 본교 vs 전국·수도권·경쟁 중앙값(§4) ──
     v.appendChild(benchMedianCard('crisis', 'var(--serious)', '위기스코어 기준군 요약',
       '구조 리스크 지수(0~100 · 높을수록 위험)', MAIN_ID,
-      function (sid) { return latestScore(sid); }, function (x) { return x.toFixed(0); }, yr));
+      function (sid) { return latestScore(sid); }, function (x) { return x.toFixed(0); }, yr,
+      '충원율·재정 등을 종합해 구조적 위험을 0~100 점수로 나타낸 참고 지표(높을수록 위험). 우리 대학 점수를 전국·수도권·경쟁대학 중간값과 비교한다.'));
     v.appendChild(h('div', { class: 'spacer-v' }));
 
     // ── A) 리스크 매트릭스 ──
     var mCard = h('div', { class: 'card' }, [
       cardHead('crisis', 'var(--serious)', '리스크 매트릭스 — ' + yr + '년',
-        'x 충원율 · y 등록금의존율(총계) · 점 크기 = 재학생 규모 · 색 = 구조 리스크 지수(낮음→높음) · ' + MAIN_NAME + ' 강조 · 경쟁대학 이름표 · 전국 중앙값 십자선'),
+        'x 충원율 · y 등록금의존율(총계) · 점 크기 = 재학생 규모 · 색 = 구조 리스크 지수(낮음→높음) · ' + MAIN_NAME + ' 강조 · 경쟁대학 이름표 · 전국 중앙값 십자선',
+        '학생을 얼마나 채우는지(가로)와 등록금에 얼마나 의존하는지(세로)로 대학들을 배치한다. 왼쪽 위(학생 부족·등록금 편중)에 몰릴수록 위험하고, 점 색이 붉을수록 종합 위험이 높다.'),
     ]);
     var mBox = chartBox(430); mCard.appendChild(mBox);
     mCard.appendChild(h('div', { class: 'risk-legend' }, [
@@ -5634,7 +5691,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 
     var tCard = h('div', { class: 'card' }, [
       cardHead('crisis', 'var(--critical)', '구조 리스크 지수 (참고용) — 상위 ' + TOPN + '개교',
-        '위기스코어 내림차순 · 5요소 위험 백분위 분해(0~100, 높을수록 위험) · ' + MAIN_NAME + ' 강조 · 폐교 대학 회색'),
+        '위기스코어 내림차순 · 5요소 위험 백분위 분해(0~100, 높을수록 위험) · ' + MAIN_NAME + ' 강조 · 폐교 대학 회색',
+        '위험 점수가 높은 대학을 순서대로 늘어놓고, 그 점수가 충원율·등록금의존·운영수지·적립금·소재지 인구 다섯 요소 중 무엇 때문인지 나눠 보여준다.'),
     ]);
     var rt = h('table', { class: 'risk-table' });
     rt.appendChild(h('thead', {}, [h('tr', {}, [
@@ -5674,7 +5732,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       schools.map(function (s, i) { return h('option', { value: i, selected: i === S.t6_traj ? 'selected' : null, text: s.n + (schoolEmphasis(i) ? ' ★' : '') }); }));
     var cCard = h('div', { class: 'card' }, [
       cardHead('timeseries', 'var(--serious)', '폐교 궤적 오버레이 — 충원율',
-        '폐교 ' + ct.n + '개교의 폐교 직전 5년(t-5~t-1) 충원율 중앙값 · 선택 대학 최근 5년을 겹쳐 "폐교 패턴과의 거리" 확인'),
+        '폐교 ' + ct.n + '개교의 폐교 직전 5년(t-5~t-1) 충원율 중앙값 · 선택 대학 최근 5년을 겹쳐 "폐교 패턴과의 거리" 확인',
+        '실제로 문을 닫은 대학들이 폐교 직전 5년 동안 학생 충원율이 어떻게 무너졌는지를, 선택한 대학의 최근 5년과 겹쳐 보여준다. 두 선이 가까울수록 비슷한 흐름이라는 뜻(표본이 적어 참고용).'),
       h('div', { class: 'row-controls' }, [ctrl('비교 대학', schoolSel)]),
     ]);
     var cBox = chartBox(320); cCard.appendChild(cBox);
@@ -5761,7 +5820,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     });
     var cliffCard = h('div', { class: 'card' }, [
       cardHead('outlook', 'var(--kmu)', '학령인구 절벽 — 18~21세 추계(' + pyears[0] + '~' + pyears[pyears.length - 1] + ')',
-        '통계청 시도 장래인구추계 · 2025년~ 추계 구간(점선·음영) · 전국 합계 굵은 선 · 국민대 소재지 서울 강조'),
+        '통계청 시도 장래인구추계 · 2025년~ 추계 구간(점선·음영) · 전국 합계 굵은 선 · 국민대 소재지 서울 강조',
+        '대학에 갈 나이(18~21세) 인구가 앞으로 얼마나 줄어드는지 통계청 추계로 보여준다. 이 인구가 곧 대학 신입생의 원천이라, 감소는 미래 등록금 수입 압박으로 이어진다.'),
       h('div', { class: 'filter-group', style: 'margin-bottom:14px' }, [h('label', { text: '표시 시도' }), chips]),
     ]);
     var cliffBox = chartBox(360); cliffCard.appendChild(cliffBox);
@@ -5797,7 +5857,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     });
     var roCard = h('div', { class: 'card' }, [
       cardHead('outlook', 'var(--serious)', '권역(시도) 전망 — 18~21세 2024→2040 감소율',
-        '감소율 큰 순 · 각 시도 소재 사립대 수 · 평균 충원율 병기 · 국민대 소재지 서울 강조'),
+        '감소율 큰 순 · 각 시도 소재 사립대 수 · 평균 충원율 병기 · 국민대 소재지 서울 강조',
+        '지역별로 18~21세 인구가 2040년까지 얼마나 줄어드는지 감소율 순으로 보여준다. 감소가 큰 지역일수록 그곳 대학들이 학생 모집에 더 큰 어려움을 겪는다.'),
       bars,
     ]);
     v.appendChild(roCard);
@@ -5824,7 +5885,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       });
       v.appendChild(h('div', { class: 'card' }, [
         cardHead('outlook', 'var(--series-4)', '경쟁대학 소재 권역 학령인구 전망',
-          '경쟁대학이 위치한 권역의 18~21세 입학자원 2024→2040 지수(2024=100) · 경쟁 환경의 인구 압력'),
+          '경쟁대학이 위치한 권역의 18~21세 입학자원 2024→2040 지수(2024=100) · 경쟁 환경의 인구 압력',
+          '경쟁대학이 자리한 지역의 입학 자원(18~21세)이 2040년까지 얼마나 줄어드는지 보여준다. 경쟁 상대들도 같은 인구 감소 압력을 받는지 가늠할 수 있다.'),
         cstrip,
       ]));
       v.appendChild(h('div', { class: 'spacer-v' }));
@@ -5844,7 +5906,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     gapSeries.push({ name: '정원(2024 유지)', color: 'var(--muted)', points: gapYears.map(function (y) { return [y, 100]; }), dashed: true, dim: true });
     var gapCard = h('div', { class: 'card' }, [
       cardHead('outlook', 'var(--series-2)', '수요-공급 갭 — 권역별 입학자원 지수(2024=100)',
-        '2024년 정원-자원 균형을 100으로 지수화(정원 2024 수준 유지 가정) · 입학자원(18~21세)이 정원 대비 몇 %로 줄어드는지'),
+        '2024년 정원-자원 균형을 100으로 지수화(정원 2024 수준 유지 가정) · 입학자원(18~21세)이 정원 대비 몇 %로 줄어드는지',
+        '지금 정원을 그대로 둘 때 지역별 입학 자원이 2040년까지 몇 %로 줄어드는지 보여준다(2024년=100). 선이 100 아래로 내려갈수록 정원을 채우기 어려워진다는 뜻.'),
     ]);
     var gapBox = chartBox(320); gapCard.appendChild(gapBox);
     gapCard.appendChild(h('div', { class: 'legend' }, gapSeries.map(function (s) {
@@ -5869,7 +5932,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       h('div', { class: 'insight neutral' }, [h('span', { text: '재정 완충력 ' + fmtMonths(msK) + ' · 구조 리스크 지수 ' + (scoreK != null ? scoreK.toFixed(0) : '—') + '(' + (scoreK != null ? SCORE_BAND_LABEL[scoreBand(scoreK)] : '—') + '). 단기 리스크는 관리 가능하나, 학령인구 절벽 장기 대비(정원·재정 완충력 확충)가 과제.' }), h('span', { class: 'in-arrow', text: '→' })]),
     ]);
     v.appendChild(h('div', { class: 'card' }, [
-      cardHead('shield', 'var(--kmu)', '국민대 포지션 — 전망 맥락 요약', '실데이터 기반 인사이트(충원율·완충력·구조 리스크 지수·서울 인구추계)'),
+      cardHead('shield', 'var(--kmu)', '국민대 포지션 — 전망 맥락 요약', '실데이터 기반 인사이트(충원율·완충력·구조 리스크 지수·서울 인구추계)',
+        '앞의 인구·재정 지표를 종합해 이 대학이 학령인구 절벽 속에서 어떤 위치에 있는지를 문장으로 정리한다.'),
       banners,
     ]));
   }
@@ -5997,7 +6061,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
   }
   function buildSimParamPanel(P, onChange) {
     var panel = h('div', { class: 'card sim-params' });
-    panel.appendChild(cardHead('simulation', 'var(--kmu)', '시나리오 파라미터', '설계 8장 · 변경 즉시 재계산'));
+    panel.appendChild(cardHead('simulation', 'var(--kmu)', '시나리오 파라미터', '설계 8장 · 변경 즉시 재계산',
+      '정원을 몇 % 줄일지, 언제부터 줄일지 같은 조건을 직접 바꿔가며 결과를 실험하는 조절판. 값을 움직이면 오른쪽 결과가 곧바로 다시 계산된다.'));
     var body = h('div', { class: 'sim-params-body' });
 
     body.appendChild(simRange('감축률 r', 'r', 0, 0.5, 0.01, function (x) { return F.pct(x, 0); }, onChange, '목표 입학정원 감축률 (0~50%)'));
@@ -6101,7 +6166,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       bandNote = ' · 잔차밴드 생략(백테스트 미검증 학교)';
     }
     var card = h('div', { class: 'card' }, [
-      cardHead('cap', col, '등록금수입(5110) 시나리오 팬차트', '무정책 기준선 대비 낙관·기준·비관 3종' + bandNote),
+      cardHead('cap', col, '등록금수입(5110) 시나리오 팬차트', '무정책 기준선 대비 낙관·기준·비관 3종' + bandNote,
+        '정원 감축 후 등록금 수입이 어떻게 변하는지 낙관·기준·비관 세 갈래 경로로 보여준다. 회색 점선은 정원을 안 줄였을 때, 음영 띠는 예측 오차 범위.'),
     ]);
     var b = chartBox(320); card.appendChild(b);
     card.appendChild(simScenarioLegend(col));
@@ -6125,7 +6191,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var pesPts = years.map(function (y, i) { return [y, scen.pessimistic.kpis[i].primed['운영수지']]; });
     var orig = scen.base.kpis.length ? scen.base.kpis[0].original['운영수지'] : null;
     var origPts = years.map(function (y) { return [y, orig]; });
-    var card = h('div', { class: 'card' }, [cardHead('scale', 'var(--series-2)', '운영수지 추이', '운영수입 − 운영지출 · 3종 시나리오 · 0선 = 흑자/적자 경계')]);
+    var card = h('div', { class: 'card' }, [cardHead('scale', 'var(--series-2)', '운영수지 추이', '운영수입 − 운영지출 · 3종 시나리오 · 0선 = 흑자/적자 경계',
+      '정원을 줄였을 때 해마다 돈이 남을지(흑자) 모자랄지(적자)를 세 시나리오로 보여준다. 선이 0 아래로 내려가면 그해 적자라는 뜻.')]);
     var b = chartBox(300); card.appendChild(b);
     card.appendChild(simScenarioLegend(col));
     C.line(b, {
@@ -6143,7 +6210,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
   // KPI 델타 카드 (기준 시나리오 · 포커스 연도)
   function simKpiCard(scen, years, fy, fi) {
     var card = h('div', { class: 'card' });
-    card.appendChild(cardHead('overview', 'var(--series-4)', '파급 KPI 델타 (기준 시나리오)', fy + '년 · 원값 → 시뮬값'));
+    card.appendChild(cardHead('overview', 'var(--series-4)', '파급 KPI 델타 (기준 시나리오)', fy + '년 · 원값 → 시뮬값',
+      '정원 감축이 등록금의존율·인건비부담률 같은 핵심 비율을 어느 방향으로 얼마나 밀어내는지, 감축 전 값에서 감축 후 값으로의 변화로 보여준다.'));
     var chips = h('div', { class: 'chip-row yearchips' });
     years.forEach(function (y) {
       chips.appendChild(h('button', { class: 'chip yearchip' + (y === fy ? ' on' : ''), text: String(y), onClick: function () { S.sim_focus = y; render(); } }));
@@ -6186,7 +6254,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var o = kb.original['인건비부담률'], p = kb.primed['인건비부담률'];
     var jump = (o != null && p != null) ? (p - o) : null;
     var card = h('div', { class: 'card sim-labor' });
-    card.appendChild(cardHead('users', 'var(--series-5)', '인건비부담률 증폭 (설계 5.3)', '수입 분모 축소 + 인건비 경직 → 비선형 급등'));
+    card.appendChild(cardHead('users', 'var(--series-5)', '인건비부담률 증폭 (설계 5.3)', '수입 분모 축소 + 인건비 경직 → 비선형 급등',
+      '학생이 줄어 수입은 감소해도 인건비는 곧바로 줄이기 어렵기 때문에, 수입 대비 인건비 비중이 예상보다 가파르게 치솟는 현상을 보여준다.'));
     card.appendChild(h('div', { class: 'sim-amp' }, [
       h('div', { class: 'amp-lab', text: '인건비부담률 · ' + fy + '년 · 인건비 완전경직(ε_L=0)' }),
       h('div', { class: 'amp-flow' }, [
@@ -6219,7 +6288,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var respRev = (pin != null) ? pin * c5112 : null;
     var rho = (entry.price && entry.price.rho_g) || 1.4;
     var card = h('div', { class: 'card' });
-    card.appendChild(cardHead('data', 'var(--series-1)', '세그먼트 분해 — 반응 가능 수입', '수업료(5112)를 학부정원내·정원외·대학원으로 분해(ρ_g=' + rho + ' 가정)'));
+    card.appendChild(cardHead('data', 'var(--series-1)', '세그먼트 분해 — 반응 가능 수입', '수업료(5112)를 학부정원내·정원외·대학원으로 분해(ρ_g=' + rho + ' 가정)',
+      '등록금 수입 중 정원 감축의 영향을 실제로 받는 부분(학부 정원내)이 얼마인지 보여준다. 대학원·정원외 수입은 감축과 무관해 그대로 둔다.'));
     var b = chartBox(110); card.appendChild(b);
     C.bar(b, {
       height: 110, stacked: true, labelW: 92, valFmt: F.krw,
@@ -6242,7 +6312,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
   // 정확도 · 한계 패널 (정직 노출)
   function simAccuracyCard(sid, entry) {
     var card = h('div', { class: 'card sim-acc' });
-    card.appendChild(cardHead('shield', 'var(--series-6)', '정확도 · 한계 (정직 노출)', '백테스트 게이트 결과를 숨기지 않고 그대로 표기'));
+    card.appendChild(cardHead('shield', 'var(--series-6)', '정확도 · 한계 (정직 노출)', '백테스트 게이트 결과를 숨기지 않고 그대로 표기',
+      '이 시뮬레이션이 과거 실제 데이터를 얼마나 잘 맞혔는지 검증 결과를 숨기지 않고 그대로 보여준다. 어느 부분이 목표에 못 미치는지도 함께 표기한다.'));
     var type = schools[sid].type;
     if (SIM_NOBT_TYPE[type]) {
       card.appendChild(h('div', { class: 'sim-warn-badge', html: '⚠ ' + type + ' — 백테스트 불가(자금계산서 종단 부재). 대학 백테스트 결과의 <b>외삽</b>으로만 정확도 간주(설계 9장 · D2 §5).' }));
@@ -6297,7 +6368,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var grpLabel = SIM_AGG_LABEL[grp] || '기준군';
     box.appendChild(h('div', { class: 'card' }, [
       cardHead('scale', 'var(--main)', '기준군 요약 — 본교 투영 vs ' + grpLabel + ' 중앙값',
-        MAIN_NAME + ' 운영수지율 투영(' + mYears[0] + '→' + mYears[mYears.length - 1] + ') 대비 ' + grpLabel + ' 현재(' + Y_LAST + ') 중앙값'),
+        MAIN_NAME + ' 운영수지율 투영(' + mYears[0] + '→' + mYears[mYears.length - 1] + ') 대비 ' + grpLabel + ' 현재(' + Y_LAST + ') 중앙값',
+        '우리 대학의 운영수지율이 감축을 거치며 어디로 향하는지를, 선택한 기준군의 현재 중간값과 견줘 보여준다.'),
       h('div', { class: 'bench' }, [
         h('div', { class: 'bench-row' }, [
           h('div', { class: 'bench-head' }, [h('span', { class: 'bench-name', text: '본교 운영수지율 (원값→투영)' }), h('span', { class: 'bench-n', text: mYears[0] + '→' + mYears[mYears.length - 1] })]),
@@ -6474,7 +6546,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var year = S.sim_tl_year; if (year == null || year < TL_YEAR_MIN || year > TL_YEAR_MAX) year = TL_YEAR_MIN;
 
     var card = h('div', { class: 'card sim-closure clo-timeline' });
-    card.appendChild(cardHead('outlook', 'var(--serious)', '20년 시간축 관찰 (2026~2045)', '이 조건이 이어질 때 위험/안정 대학이 20년에 걸쳐 어떻게 갈리는가 · 슬라이더/재생으로 천천히 관찰'));
+    card.appendChild(cardHead('outlook', 'var(--serious)', '20년 시간축 관찰 (2026~2045)', '이 조건이 이어질 때 위험/안정 대학이 20년에 걸쳐 어떻게 갈리는가 · 슬라이더/재생으로 천천히 관찰',
+      '아래 그래프의 색 띠는 연도마다 각 등급(안정~심각)에 속한 대학 수를 쌓은 것. 붉은 띠가 두꺼워질수록 위험 대학이 늘어난다는 뜻이며, 슬라이더나 재생으로 연도를 움직여 관찰한다(통계적 예측이 아닌 관찰용 확장).'));
     card.appendChild(h('span', { class: 'pill warn sim-beta-inline', html: '<i></i>관찰용 외삽 — 통계적 예측 아님 · 4년 백테스트를 20년으로 확장(σ 시간확대)' }));
 
     var yearLbl = h('span', { class: 'clo-tl-yearval', text: String(year) });
@@ -6583,8 +6656,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     });
     if (!years) { box.appendChild(h('div', { class: 'card' }, [h('p', { class: 'hint', text: '집계 대상 학교가 없습니다.' })])); return; }
     var col = 'var(--kmu)';
-    function fanCard(title, sub, ic, iccol, opt, bas, pes, base, zero) {
-      var c = h('div', { class: 'card' }, [cardHead(ic, iccol, title, sub)]);
+    function fanCard(title, sub, ic, iccol, opt, bas, pes, base, zero, plain) {
+      var c = h('div', { class: 'card' }, [cardHead(ic, iccol, title, sub, plain)]);
       var b = chartBox(300); c.appendChild(b); c.appendChild(simScenarioLegend(col));
       C.line(b, {
         height: 300, yZero: !!zero, xTicks: years, yFmt: F.krwAxis, tipFmt: F.krw,
@@ -6597,8 +6670,10 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       });
       return c;
     }
-    box.appendChild(fanCard('코호트 등록금수입(5100) 합계 — ' + n + '개교(' + respN + '개 반응)', grpLabel + ' 기준군 · 3종 시나리오 레벨 합', 'data', col, sOpt, sBas, sPes, sBase, false));
-    box.appendChild(fanCard('코호트 운영수지 합계', '3종 시나리오 · 0선 = 흑자/적자 경계', 'scale', 'var(--series-2)', oOpt, oBas, oPes, oOrig, true));
+    box.appendChild(fanCard('코호트 등록금수입(5100) 합계 — ' + n + '개교(' + respN + '개 반응)', grpLabel + ' 기준군 · 3종 시나리오 레벨 합', 'data', col, sOpt, sBas, sPes, sBase, false,
+      '선택한 기준군에 속한 대학들의 등록금 수입을 모두 더해, 정원 감축이 집단 전체 수입에 미치는 영향을 세 시나리오로 보여준다.'));
+    box.appendChild(fanCard('코호트 운영수지 합계', '3종 시나리오 · 0선 = 흑자/적자 경계', 'scale', 'var(--series-2)', oOpt, oBas, oPes, oOrig, true,
+      '기준군 전체의 운영수지(흑자/적자)를 합산해 집단 차원의 영향을 세 시나리오로 보여준다. 0선 아래는 집단 합계가 적자라는 뜻.'));
     box.appendChild(h('div', { class: 'card sim-acc' }, [
       cardHead('shield', 'var(--series-6)', '집계 모드 주의', '개별 KPI·세그먼트·백테스트는 대학 선택 모드에서 확인'),
       h('p', { class: 'hint', text: '집계는 반응 세그먼트 보유 학교의 시나리오 레벨 합입니다. 백테스트는 대학 145교 기준(전문대·사이버·대학원대 종단 부재로 검증 불가, 설계 9장·D2 §5).' }),
@@ -6645,7 +6720,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var cg = ENG.closureGrade(entry, proj, opts);
     var g = CLOSURE_GRADES[cg.grade];
     var card = h('div', { class: 'card sim-closure' });
-    card.appendChild(cardHead('crisis', g.color, '폐교(존속) 위험 판정', schools[sid].n + ' · 현재 시나리오 기준'));
+    card.appendChild(cardHead('crisis', g.color, '폐교(존속) 위험 판정', schools[sid].n + ' · 현재 시나리오 기준',
+      '현재 조건에서 이 대학이 재정적으로 얼마나 버틸 수 있는지 안정~심각 등급으로 판정한다. 재정 존속위험 신호일 뿐 폐교가 확정됐다는 뜻은 아니다.'));
     card.appendChild(verifiedPill());
     card.appendChild(h('div', { class: 'clo-banner g-' + g.tone }, [
       h('div', { class: 'clo-grade-big', text: g.label }),
@@ -6681,9 +6757,9 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
   }
 
   // ── 등급 분포 스택바(단일/그룹 공용) ──
-  function closureStackCard(icon, iccol, title, sub, groupAgg, order) {
+  function closureStackCard(icon, iccol, title, sub, groupAgg, order, plain) {
     var card = h('div', { class: 'card sim-closure' });
-    card.appendChild(cardHead(icon, iccol, title, sub));
+    card.appendChild(cardHead(icon, iccol, title, sub, plain));
     var keys = order.filter(function (k) { return groupAgg[k] && groupAgg[k].total > 0; });
     var single = keys.length === 1 && keys[0] === 'all';
     var hgt = keys.length * 42 + 44;
@@ -6714,7 +6790,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var LIMIT = 15, showAll = S.sim_closure_all;
     var shown = showAll ? rows : rows.slice(0, LIMIT);
     var card = h('div', { class: 'card sim-closure' });
-    card.appendChild(cardHead('data', 'var(--series-1)', '학교별 판정 (위험도순)', rows.length + '개교 · 미분류 제외 · 위험도 높은 순'));
+    card.appendChild(cardHead('data', 'var(--series-1)', '학교별 판정 (위험도순)', rows.length + '개교 · 미분류 제외 · 위험도 높은 순',
+      '전국 대학을 위험도가 높은 순서로 줄 세운 표. 각 대학의 등급, 적립금 소진 예상 시점, 판정 근거를 확인할 수 있다.'));
     var tbl = h('table', { class: 'data' });
     tbl.appendChild(h('thead', {}, [h('tr', {}, ['대학', '등급', '소진예상', 'M(운영수지율)', '충원율', '근거 게이트'].map(function (t) { return h('th', { text: t }); }))]));
     var tb = h('tbody');
@@ -6762,7 +6839,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 
     // 1) 헤드라인
     var head = h('div', { class: 'card sim-closure clo-headline' });
-    head.appendChild(cardHead('crisis', 'var(--serious)', '폐교(존속) 위험 판정 — 전국 ' + total + '개교', '이 조건이 이어질 경우의 재정 존속위험 · 필터 무관 전국 기준'));
+    head.appendChild(cardHead('crisis', 'var(--serious)', '폐교(존속) 위험 판정 — 전국 ' + total + '개교', '이 조건이 이어질 경우의 재정 존속위험 · 필터 무관 전국 기준',
+      '현재 조건에서 전국 대학 중 재정적으로 위험한 곳이 몇 개인지 집계한다. 재정 존속위험을 뜻하며 폐교가 확정됐다는 의미는 아니다.'));
     head.appendChild(verifiedPill());
     head.appendChild(h('div', { class: 'clo-hero' }, [
       h('div', { class: 'clo-hero-num' }, [h('span', { class: 'chn-n', text: String(N) }), h('span', { class: 'chn-u', text: '개교' })]),
@@ -6783,7 +6861,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     // 1.5) 경쟁대학 등급 — 전국 344교와 동일 기준의 별도 행(§4)
     if (COMP_IDS.length) {
       var compCard = h('div', { class: 'card sim-closure' });
-      compCard.appendChild(cardHead('compare', 'var(--series-2)', '경쟁대학 폐교위험 등급', '전국 판정과 동일 기준 · 경쟁대학만 별도 표시'));
+      compCard.appendChild(cardHead('compare', 'var(--series-2)', '경쟁대학 폐교위험 등급', '전국 판정과 동일 기준 · 경쟁대학만 별도 표시',
+        '전국과 똑같은 기준으로 경쟁대학들의 위험 등급만 따로 뽑아 보여준다.'));
       var ctbl = h('table', { class: 'data' });
       ctbl.appendChild(h('thead', {}, [h('tr', {}, ['경쟁대학', '등급', '소진예상', 'M(운영수지율)', '충원율'].map(function (t) { return h('th', { text: t }); }))]));
       var ctb = h('tbody');
@@ -6806,12 +6885,14 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     }
 
     // 2) 등급 분포 스택바(344교)
-    box.appendChild(closureStackCard('overview', 'var(--kmu)', '등급 분포', total + '개교 · 슬라이더 연동 실시간', { all: mkBucket(agg.counts) }, ['all']));
+    box.appendChild(closureStackCard('overview', 'var(--kmu)', '등급 분포', total + '개교 · 슬라이더 연동 실시간', { all: mkBucket(agg.counts) }, ['all'],
+      '전국 대학을 안정·주의·위험·심각 등급으로 나눠, 각 등급에 몇 개교가 있는지 하나의 막대에 쌓아 보여준다.'));
 
     // 3) 전이 표시
     if (P.r > 0) {
       var trCard = h('div', { class: 'card sim-closure clo-transition' });
-      trCard.appendChild(cardHead('outlook', 'var(--series-4)', '기준(감축 0%) 대비 전이', '감축 시나리오가 등급을 얼마나 끌어내리는가'));
+      trCard.appendChild(cardHead('outlook', 'var(--series-4)', '기준(감축 0%) 대비 전이', '감축 시나리오가 등급을 얼마나 끌어내리는가',
+        '정원을 안 줄인 경우와 비교해, 감축 때문에 등급이 나빠지거나 새로 위험에 빠진 대학이 몇 개인지 보여준다.'));
       trCard.appendChild(h('div', { class: 'clo-tr-row' }, [
         cloStat('등급 하락 개교', String(tr.downgraded)),
         cloStat('신규 폐교위험 진입', String(tr.newAtRisk)),
@@ -6820,8 +6901,10 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     }
 
     // 4) 권역×등급 · 규모×등급 분포
-    box.appendChild(closureStackCard('compare', 'var(--series-2)', '권역 × 등급 분포', '지방권 집중도 가시화', agg.byRegion, CLOSURE_REGION_ORDER));
-    box.appendChild(closureStackCard('scale', 'var(--series-3)', '규모 × 등급 분포', '소규모 집중도 가시화', agg.byScale, CLOSURE_SCALE_ORDER));
+    box.appendChild(closureStackCard('compare', 'var(--series-2)', '권역 × 등급 분포', '지방권 집중도 가시화', agg.byRegion, CLOSURE_REGION_ORDER,
+      '지역(수도권·광역권·지방권)별로 위험 등급이 어떻게 나뉘는지 비교해, 위험이 어느 지역에 몰려 있는지 보여준다.'));
+    box.appendChild(closureStackCard('scale', 'var(--series-3)', '규모 × 등급 분포', '소규모 집중도 가시화', agg.byScale, CLOSURE_SCALE_ORDER,
+      '대학 규모(대·중·소)별로 위험 등급이 어떻게 나뉘는지 비교해, 위험이 어느 규모에 몰려 있는지 보여준다.'));
 
     // 5) 학교별 배지 테이블
     box.appendChild(closureSchoolTable(P));
@@ -6859,7 +6942,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
       ]);
       cards.appendChild(mini);
     });
-    v.appendChild(h('div', { class: 'card' }, [h('h3', { text: '항등식 검증 (특례규칙 제15~20조)' }), h('div', { class: 'card-sub', text: '허용오차 1천원' }), cards]));
+    v.appendChild(h('div', { class: 'card' }, [h('h3', { text: '항등식 검증 (특례규칙 제15~20조)' }), h('div', { class: 'card-sub', text: '허용오차 1천원' }),
+      pdesc('자금계산서의 수입·지출·이월 합계가 회계 규칙상 서로 맞아떨어지는지 자동으로 검사한 결과. 전건 통과면 데이터 정합성이 확인됐다는 뜻.'), cards]));
     v.appendChild(h('div', { class: 'spacer-v' }));
 
     // 위반 상위 테이블
@@ -6875,7 +6959,9 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
         ]));
       });
       tbl.appendChild(tb);
-      v.appendChild(h('div', { class: 'card' }, [h('h3', { text: '위반 상위 (차이 절댓값 순)' }), h('div', { class: 'tbl-wrap' }, [tbl])]));
+      v.appendChild(h('div', { class: 'card' }, [h('h3', { text: '위반 상위 (차이 절댓값 순)' }),
+        pdesc('위 검사에서 양변이 어긋난 사례를 차이가 큰 순으로 보여준다. 원자료 입력 오류나 특이 회계 처리를 짚어 볼 수 있다.'),
+        h('div', { class: 'tbl-wrap' }, [tbl])]));
     } else {
       v.appendChild(h('div', { class: 'card' }, [h('h3', { text: '위반 상위' }), h('p', { class: 'hint', text: '검출된 위반이 없습니다.' })]));
     }
@@ -6886,7 +6972,8 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     KPI_KEYS.forEach(function (k) { notes.appendChild(h('dt', { text: KPI_META[k].label })); notes.appendChild(h('dd', { html: '<code>' + KPI_META[k].desc + '</code>' })); });
     notes.appendChild(h('dt', { text: '출처' }));
     notes.appendChild(h('dd', { text: '사학기관 재무·회계 규칙에 대한 특례규칙 별표 1, 한국사학진흥재단 대학재정분석 지표. 단위: ' + DATA.meta.unit + '.' }));
-    v.appendChild(h('div', { class: 'card' }, [h('h3', { text: '산식 · 법령 출처' }), notes]));
+    v.appendChild(h('div', { class: 'card' }, [h('h3', { text: '산식 · 법령 출처' }),
+      pdesc('대시보드에 쓰인 각 지표를 어떤 공식으로 계산했는지와 근거 법령·출처를 정리했다.'), notes]));
     v.appendChild(h('div', { class: 'spacer-v' }));
 
     // 원데이터 탐색
@@ -6902,6 +6989,7 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
     var explCard = h('div', { class: 'card' }, [
       h('h3', { text: '원데이터 탐색' }),
       h('div', { class: 'card-sub', text: '대학 × 연도 × 계정 · CSV 내보내기는 집계필터(' + Array.from(TYPE_SET).join('/') + ') 준수 · 헤더에 설정 스냅샷 1행' }),
+      pdesc('특정 대학·연도·구분을 골라 계정별 원본 금액을 직접 확인하고, 필요하면 CSV 파일로 내려받는다.'),
       h('div', { class: 'row-controls' }, [ctrl('대학', schoolSel), ctrl('연도', yearSel), ctrl('구분', sideSel), h('div', { class: 'ctrl' }, [h('label', { text: ' ' }), dlBtn])]),
     ]);
     var etbl = h('table', { class: 'data' });

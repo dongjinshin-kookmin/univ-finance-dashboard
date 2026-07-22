@@ -1336,3 +1336,28 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
   .clo-tile { transition: none; }
   .clo-tile.changed { animation: none; }
 }
+
+/* ── 항목 평이 설명 서브텍스트 (v10.3) ─────────────────────────
+   비전문가용 "이 항목이 무엇을 보여주는가" 한 줄. 기술적 card-sub보다
+   약간 진한 색(가독)·정상 자간, 제목 바로 아래. 모바일 자연 줄바꿈. */
+.card-plain,
+.sec-desc {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  max-width: 68ch;
+}
+/* 카드 헤더 안(제목 아래) — sub와의 간격 */
+.card-head .ch-txt .card-plain { margin: 4px 0 0; }
+.card-head .ch-txt .card-plain + .card-sub { margin-top: 3px; }
+/* h3 직접 렌더 카드(시계열·비교 등)에서 h3/card-sub 아래 독립 줄 */
+.card > .sec-desc { margin: 4px 0 6px; }
+.card > h3 + .sec-desc { margin-top: 6px; }
+.card > .card-sub + .sec-desc { margin-top: 2px; }
+/* 분석 패널(수지 구조) 등 촘촘한 카드에서는 살짝 축소 */
+.t2-panel .card-plain { font-size: 0.78rem; margin-top: 3px; }
+/* 다크 모드 가독 보정 */
+:root[data-theme="dark"] .card-plain,
+:root[data-theme="dark"] .sec-desc { color: var(--text-secondary); }
