@@ -6,3 +6,7 @@ metadata/raw/
 .DS_Store
 # 에이전트 worktree
 .claude/
+# 검증용 로컬 의존성
+node_modules/
+package.json
+package-lock.json
