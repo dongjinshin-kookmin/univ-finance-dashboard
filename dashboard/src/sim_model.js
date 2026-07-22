@@ -23,14 +23,17 @@
   // profile: 'immediate'(즉시, 기본) | 'linear'(선형 램프). params.rSchedule({year:r})가 있으면 우선.
   function reductionOf(params, c) {
     var t0 = params.t0, r = params.r || 0;
+    // 감축 온셋 디커플(설계 §2.4, 가법·후방호환): rStart 미지정 → t0(기존과 완전 동일).
+    // π·인구드리프트 원점은 t0(=base)에 남고 감축 게이트·램프 원점만 rStart로 분리한다.
+    var onset = params.rStart != null ? params.rStart : t0;
     if (params.rSchedule) {                    // 명시 스케줄 우선
       var v = params.rSchedule[String(c)];
-      return v != null ? v : (c < t0 ? 0 : r);
+      return v != null ? v : (c < onset ? 0 : r);
     }
-    if (c < t0) return 0;
+    if (c < onset) return 0;
     if ((params.profile || 'immediate') === 'linear') {
       var ramp = params.rampYears || 5;
-      return r * Math.min(1, (c - t0 + 1) / ramp);
+      return r * Math.min(1, (c - onset + 1) / ramp);
     }
     return r;                                   // immediate
   }
@@ -76,6 +79,7 @@
       profile: params.profile || 'immediate',
       rampYears: params.rampYears || 5,
       rSchedule: params.rSchedule || null,
+      rStart: params.rStart != null ? params.rStart : null,   // 감축 온셋(설계 §2.4); null → t0
       fillMode: params.fillMode || 'realistic',     // 'realistic'(현실, 기본) | 'conservative'(보수/고정)
       beta: params.beta != null ? params.beta : (d.beta != null ? d.beta : 0.5),
       fMax: params.fMax != null ? params.fMax : 1.0,
@@ -413,29 +417,41 @@
 
   // 완충 소진 rollforward(설계 §2): reserve_{t+1}=reserve_t+primed운영수지(t)+corp_addl.
   // 첫 음수해 = 소진예상, R=소진연도−t0. horizon 내 미소진이면 정착수지로 외삽(선린대 R≈68 재현).
+  //  가법(설계 §5.1-2): reservePath[i] = reserve(years[i]) 완충잔액 경로를 추가 반환.
+  //  R·depletionYear 산출 로직·수치는 종전과 **비트 동일**(첫 소진해 조기포착값 그대로;
+  //  reservePath는 소진 이후에도 음수로 계속 누적해 grade(t)·reserveMonths(t) 스케일에 쓰인다).
   function runwayRollforward(reserve0, perYearBal, corpAddl, years, t0, win) {
     var reserve = reserve0 != null ? reserve0 : 0;
+    var reservePath = [reserve];                 // reserve(years[0]) = 앵커(2025) 잔액
     var i, bal, next;
+    var R = null, depletionYear = null, depleted = false;
     for (i = 0; i < years.length; i++) {
       bal = (perYearBal[i] != null ? perYearBal[i] : 0) + corpAddl;
       next = reserve + bal;
-      if (next < 0) {
+      if (!depleted && next < 0) {                // 첫 소진해 — 종전과 동일하게 여기서 R 확정
         var frac = bal < 0 ? reserve / (-bal) : 0;
         frac = frac < 0 ? 0 : (frac > 1 ? 1 : frac);
-        var R = (years[i] - t0) + frac;
-        return { R: R, depletionYear: Math.round(t0 + R) };
+        R = (years[i] - t0) + frac;
+        depletionYear = Math.round(t0 + R);
+        depleted = true;
       }
       reserve = next;
+      if (i < years.length - 1) reservePath.push(reserve);   // reserve(years[i+1])
     }
-    var settle = 0, cnt = 0;
-    for (i = Math.max(0, perYearBal.length - win); i < perYearBal.length; i++) {
-      if (perYearBal[i] != null) { settle += perYearBal[i]; cnt++; }
+    if (!depleted) {                              // horizon 내 미소진 → 정착수지 외삽(종전 로직)
+      var settle = 0, cnt = 0;
+      for (i = Math.max(0, perYearBal.length - win); i < perYearBal.length; i++) {
+        if (perYearBal[i] != null) { settle += perYearBal[i]; cnt++; }
+      }
+      settle = (cnt ? settle / cnt : 0) + corpAddl;
+      if (settle >= 0) { R = Infinity; depletionYear = null; }
+      else {
+        var lastY = years[years.length - 1];
+        R = (lastY - t0) + reserve / (-settle);
+        depletionYear = Math.round(t0 + R);
+      }
     }
-    settle = (cnt ? settle / cnt : 0) + corpAddl;
-    if (settle >= 0) return { R: Infinity, depletionYear: null };
-    var lastY = years[years.length - 1];
-    var R2 = (lastY - t0) + reserve / (-settle);
-    return { R: R2, depletionYear: Math.round(t0 + R2) };
+    return { R: R, depletionYear: depletionYear, reservePath: reservePath };
   }
 
   // 관측 모드 runway: 적립금월수/|적자율| (설계 §2 선린대 (7.35/12)/0.009≈68 검산선).
@@ -616,6 +632,321 @@
     };
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  //  B7 — 연도별 등급 시계열  SIM.closureTimeline  (설계 §1·§2)
+  //  2025~2045 각 연도에 §2 검증 매트릭스·오버라이드를 스냅샷 재적용(새 임계값 없음).
+  //  project(1회)+recalcSeries(1회)+rollforward(1회) 후 21년 판독 — 재투영 없음(설계 §7 대안 기각).
+  //  기존 closureGrade/closureAggregate 무수정; 검증 원시함수(marginClass/bufferClass/
+  //  matrixGrade/applyOverrides/runwayRollforward)를 **재사용**(단일 소스).
+  // ══════════════════════════════════════════════════════════════════════
+  var TL_BASE = 2025, TL_END = 2045;
+  var TL_VALIDATED_TO = 2029, TL_DRIFT_TO = 2040;   // 정직성 3구간 경계(달력 고정, 설계 §2.1)
+  var H_BT = 4;                                      // 백테스트 지평(σ(t) 확대 기준, 설계 §2.2)
+
+  // 관찰창 정규화: base=2025 고정(미지정 시), horizon은 2045까지 도달하도록 확장(가법·비파괴).
+  // horizon 확장은 앞 구간 수치 불변(설계 §2.5 horizon 무의존) → 뒤 연도만 추가.
+  function _timelineWindow(params) {
+    var p = {}; for (var k in params) p[k] = params[k];
+    if (p.t0 == null) p.t0 = TL_BASE;
+    var need = TL_END - p.t0;
+    if (p.horizon == null || p.horizon < need) p.horizon = need;
+    return p;
+  }
+
+  function _phaseOf(t) {
+    if (t <= TL_VALIDATED_TO) return 'verified';        // 2025~2029 백테스트 검증범위
+    if (t <= TL_DRIFT_TO) return 'projected';           // 2030~2040 인구추계 실재
+    return 'extrapolated';                              // 2041~2045 관찰용 외삽
+  }
+
+  // 인구드리프트(설계 §2.3): 기본은 cumDrift(2040 이후 자동 동결). driftTail='lastRate'면
+  // 데이터 종료연도 이후를 마지막 YoY율로 지속(민감도 토글, 기본 OFF).
+  function _driftAt(meta, sido, t0, t, tail) {
+    if (tail !== 'lastRate') return cumDrift(meta, sido, t0, t);
+    if (!meta || !meta.pop18_decline || !sido || t <= t0) return cumDrift(meta, sido, t0, t);
+    var s = meta.pop18_decline[sido]; if (!s) return 0;
+    var yrs = Object.keys(s).map(Number); if (!yrs.length) return cumDrift(meta, sido, t0, t);
+    var lastY = Math.max.apply(null, yrs);
+    if (t <= lastY) return cumDrift(meta, sido, t0, t);
+    var idx = 1, y;
+    for (y = t0 + 1; y <= lastY; y++) idx *= (1 + (s[String(y)] || 0));
+    var lastRate = s[String(lastY)] || 0;
+    for (y = lastY + 1; y <= t; y++) idx *= (1 + lastRate);
+    return idx - 1;
+  }
+
+  // σ(t) 상대오차 해상(오케스트레이터 결정3): bt.mape_rev(학교) → 유형/규모 그룹중앙값 → 전역 순 폴백.
+  //   폴백 출처를 bandSrc로 표기. 현 데이터는 전 학교 bt=null → rel=null·src='none'(밴드 생략).
+  function _resolveSigma(schoolSim, opts) {
+    var bt = schoolSim.bt;
+    if (bt && bt.mape_rev != null) return { rel: bt.mape_rev, src: 'school' };
+    var fb = opts.sigmaFallback;
+    if (fb) {
+      if (opts.type && fb.byType && fb.byType[opts.type] != null) return { rel: fb.byType[opts.type], src: 'group' };
+      if (opts.scale && fb.byScale && fb.byScale[opts.scale] != null) return { rel: fb.byScale[opts.scale], src: 'group' };
+      if (fb.global != null) return { rel: fb.global, src: 'global' };
+    }
+    return { rel: null, src: 'none' };
+  }
+
+  // 연도 t 경계밴드(설계 §2.2 σ(t) 확대): M을 ±z·σ(t)·|M|, runway 임계 {2,5,10}±1y 섭동 재판정.
+  //   σ(t)=null(밴드 미보유)이면 runway 근접 섭동만(관측밴드 성격) — closureBoundary와 정합.
+  function _gradeBandAt(baseGrade, M, fill, runway, reserveMonths, sigmaT) {
+    if (baseGrade === 'unrated') return ['unrated', 'unrated'];
+    var z = 1.28, ranks = [GRADE_RANK[baseGrade]];
+    var Ms = [M], Rs = [runway];
+    if (sigmaT != null && M != null) { var half = z * sigmaT * Math.abs(M); Ms = [M - half, M, M + half]; }
+    var near = (runway != null && isFinite(runway)) &&
+               [2, 5, 10].some(function (x) { return Math.abs(runway - x) <= 1; });
+    if (near) Rs = [runway - 1, runway, runway + 1];
+    for (var a = 0; a < Ms.length; a++) {
+      for (var b = 0; b < Rs.length; b++) {
+        var g = applyOverrides(matrixGrade(marginClass(Ms[a]), bufferClass(Rs[b], reserveMonths)),
+                               Ms[a], fill, reserveMonths);
+        ranks.push(GRADE_RANK[g]);
+      }
+    }
+    var lo = Math.min.apply(null, ranks), hi = Math.max.apply(null, ranks);
+    return [GRADE_BY_RANK[lo], GRADE_BY_RANK[hi]];
+  }
+
+  // 확정지연 가드(설계 §1.3, 옵션·기본 OFF): 등급 변경이 1년만 유지 후 직전 등급으로
+  // 되돌면(X→Y→X) 그 1년을 직전 등급으로 덮어써 근거 약한 1년 반전(지터)을 억제. O(1) 상태.
+  // 결정론적 임계 교차(실제 전이)까지 지우므로 근거 있을 때만 켠다.
+  function _applyConfirmDelay(raw) {
+    var out = raw.slice();
+    for (var i = 1; i < out.length - 1; i++) {
+      if (out[i] !== out[i - 1] && out[i + 1] === out[i - 1]) out[i] = out[i - 1];
+    }
+    return out;
+  }
+
+  function closureTimeline(schoolSim, params, opts) {
+    opts = opts || {};
+    var P0 = _timelineWindow(params);
+    var meta = opts.meta || {};
+    var stock = schoolSim.stock || {};
+    var flags = schoolSim.flags || {};
+
+    var proj = project(schoolSim, P0, opts);
+    var Pr = proj.params;
+    var kseries = opts.kpiSeries || recalcSeries(schoolSim, proj, P0, opts);
+    var years = proj.years, n = years.length;
+
+    // ── 완충축 입력(투영 모드; closureGrade와 동일 해상, obs 폴백 없음) ──
+    var reserveAvail = stock.reserve_avail != null ? stock.reserve_avail
+      : (opts.reserveAvailFallback != null ? opts.reserveAvailFallback : null);
+    var reserveMonths0 = stock.reserve_month0 != null ? stock.reserve_month0 : null;
+    var corpCap = stock.corp_capacity != null ? stock.corp_capacity : null;
+    var corpAddl = (opts.useCorpSupport && corpCap != null) ? corpCap : 0;
+
+    // ── 연도별 primed 운영수지(천원)·운영수지율 ──
+    var perYearBal = [], Mseries = [];
+    for (var i = 0; i < kseries.length; i++) {
+      var pr = kseries[i].primed || {};
+      perYearBal.push(pr['운영수지'] != null ? pr['운영수지'] : null);
+      Mseries.push(pr['운영수지율'] != null ? pr['운영수지율'] : null);
+    }
+    var win = Math.min(3, Pr.horizon);
+    var roll = runwayRollforward(reserveAvail, perYearBal, corpAddl, years, Pr.t0, win);
+    var reservePath = roll.reservePath, R_full = roll.R, depletionYear = roll.depletionYear;
+    var reserve0 = reservePath[0];
+
+    var f0 = proj.meta ? proj.meta.f0 : null;
+    var lambda = Pr.lambda;
+    var sig = _resolveSigma(schoolSim, opts);
+
+    var isNoUg = flags.status === 'no_ug' || opts.noUg === true;
+    var isGrad = opts.isGrad === true || (opts.type != null && /대학원/.test(opts.type));
+
+    var grades = [], Rarr = [], resArr = [], moArr = [], fillArr = [],
+        phaseArr = [], sigmaArr = [], rangeArr = [];
+    var firstAtRiskYear = null, firstCriticalYear = null;
+
+    for (i = 0; i < n; i++) {
+      var t = years[i];
+      var M = Mseries[i];
+      var reserveT = reservePath[i];
+
+      // fill(t): λ-off f0; λ-on f0·(1+λ·drift(2025→t))  — 그 해까지의 드리프트(정착값 아님)
+      var fillT = f0;
+      if (f0 != null && lambda) {
+        fillT = f0 * (1 + lambda * _driftAt(meta, opts.sido, Pr.t0, t, opts.driftTail));
+      }
+
+      // reserveMonths(t) = reserve_month0 · reserve(t)/reserve(2025) (앵커 고정·소진분수 스케일)
+      var moT;
+      if (reserveMonths0 == null) moT = null;
+      else if (reserve0 == null || reserve0 === 0) moT = reserveMonths0;
+      else { var ratio = reserveT / reserve0; if (ratio < 0) ratio = 0; moT = reserveMonths0 * ratio; }
+      if (reserveMonths0 != null && reserveT != null && reserveT <= 0) moT = 0;
+
+      // R(t): 관측시점 t에서 본 잔여 runway = R_full − (t−2025), 소진연도 없으면 ∞.
+      //   reserve(t)≤0 → R(t)=0 floor는 **소진 경로가 존재할 때만**(depletionYear!=null) 적용한다.
+      //   reserve_avail=0·재무결측(적자 없음)은 소진이 아니라 데이터부재 → closureGrade와 동일하게 ∞ 유지.
+      var Rt;
+      if (depletionYear == null) Rt = Infinity;
+      else {
+        Rt = R_full - (t - Pr.t0);
+        if (Rt < 0) Rt = 0;
+        if (reserveT != null && reserveT <= 0) Rt = 0;
+      }
+
+      // grade(t): §2 매트릭스+오버라이드 스냅샷 재적용 / 미분류 게이트(closureGrade 동일)
+      var g;
+      if (isNoUg || isGrad || (M == null && fillT == null)) g = 'unrated';
+      else g = applyOverrides(matrixGrade(marginClass(M), bufferClass(Rt, moT)), M, fillT, moT);
+
+      var sigmaT = sig.rel != null ? sig.rel * Math.sqrt(Math.max(1, (t - TL_BASE) / H_BT)) : null;
+
+      grades.push(g); Rarr.push(Rt); resArr.push(reserveT); moArr.push(moT); fillArr.push(fillT);
+      phaseArr.push(_phaseOf(t)); sigmaArr.push(sigmaT);
+      rangeArr.push(_gradeBandAt(g, M, fillT, Rt, moT, sigmaT));
+      if (firstAtRiskYear == null && GRADE_RANK[g] != null && GRADE_RANK[g] >= GRADE_RANK.atrisk) firstAtRiskYear = t;
+      if (firstCriticalYear == null && g === 'critical') firstCriticalYear = t;
+    }
+
+    // 확정지연 가드(기본 OFF) — 켜지면 1년 반전 억제 후 firstAtRisk/Critical 재산출
+    if (opts.confirmDelay) {
+      grades = _applyConfirmDelay(grades);
+      firstAtRiskYear = null; firstCriticalYear = null;
+      for (i = 0; i < n; i++) {
+        if (firstAtRiskYear == null && GRADE_RANK[grades[i]] != null && GRADE_RANK[grades[i]] >= GRADE_RANK.atrisk) firstAtRiskYear = years[i];
+        if (firstCriticalYear == null && grades[i] === 'critical') firstCriticalYear = years[i];
+      }
+    }
+
+    var confidence = (isNoUg || isGrad) ? 'low' : (schoolSim.bt != null ? 'ok' : 'beta');
+
+    return {
+      years: years, grades: grades,
+      M: Mseries, reserve: resArr, runway: Rarr, reserveMonths: moArr, fill: fillArr,
+      phase: phaseArr, sigma: sigmaArr, gradeRange: rangeArr,
+      depletionYear: depletionYear, firstAtRiskYear: firstAtRiskYear, firstCriticalYear: firstCriticalYear,
+      confidence: confidence, bandSrc: sig.src
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  //  B8 — 전국 연도별 등급 시계열 집계  SIM.closureAggregateTimeline  (설계 §3.3)
+  //  각 학교 closureTimeline 1회(+r=0 기준선) → 연도×등급 카운트·위험진입 incidence·
+  //  권역별 소계·기준 대비 하락 시계열. 성능계약: 344교×21년 사전계산 1회 ≤100ms.
+  //  슬라이더/재생은 bySchool[i].grades[year] 판독만(재계산 0).
+  // ══════════════════════════════════════════════════════════════════════
+  function _median(arr) {
+    if (!arr.length) return null;
+    var s = arr.slice().sort(function (a, b) { return a - b; });
+    var m = s.length >> 1;
+    return (s.length % 2) ? s[m] : (s[m - 1] + s[m]) / 2;
+  }
+
+  // σ(t) 그룹·전역 폴백 사전계산(bt.mape_rev 보유교로만). 전 학교 bt=null이면 전부 null.
+  function _buildSigmaFallback(bySchoolMap, schoolsMeta) {
+    var all = [], byTypeArr = {}, byScaleArr = {};
+    Object.keys(bySchoolMap).forEach(function (idx) {
+      var bt = bySchoolMap[idx].bt;
+      if (!bt || bt.mape_rev == null) return;
+      var v = bt.mape_rev, sm = schoolsMeta[+idx] || {};
+      all.push(v);
+      if (sm.type) (byTypeArr[sm.type] = byTypeArr[sm.type] || []).push(v);
+      if (sm.scale) (byScaleArr[sm.scale] = byScaleArr[sm.scale] || []).push(v);
+    });
+    var byType = {}, byScale = {}, t, s;
+    for (t in byTypeArr) byType[t] = _median(byTypeArr[t]);
+    for (s in byScaleArr) byScale[s] = _median(byScaleArr[s]);
+    return { byType: byType, byScale: byScale, global: _median(all) };
+  }
+
+  function _mkCounts() { return { stable: 0, caution: 0, atrisk: 0, critical: 0, unrated: 0 }; }
+  function _bumpTL(bucketMap, key, grade) {
+    var b = bucketMap[key];
+    if (!b) { b = bucketMap[key] = { stable: 0, caution: 0, atrisk: 0, critical: 0, unrated: 0, atRiskOrWorse: 0, total: 0 }; }
+    b[grade]++; b.total++;
+    if (GRADE_RANK[grade] != null && GRADE_RANK[grade] >= GRADE_RANK.atrisk) b.atRiskOrWorse++;
+  }
+
+  function closureAggregateTimeline(simData, params, opts) {
+    opts = opts || {};
+    var bySchoolMap = simData.bySchool || simData;
+    var meta = opts.meta || simData.meta || {};
+    var schoolsMeta = opts.schools || [];
+    var P = _timelineWindow(params);
+    var baseP = {}; for (var k in P) baseP[k] = P[k];
+    baseP.r = 0;                                        // 전이 비교 기준(r=0)
+    var sameAsBase = (P.r == null || P.r === 0);        // r=0이면 기준선 재계산 생략(성능)
+
+    var sigmaFallback = _buildSigmaFallback(bySchoolMap, schoolsMeta);
+    var idxs = Object.keys(bySchoolMap);
+
+    var years = null, Y = 0;
+    var counts = null, atRiskOrWorse = null, atRiskLo = null, atRiskHi = null,
+        byRegion = null, byScale = null, downgraded = null;
+    var incidence = null;                               // year → [idx...] (위험+ 최초 진입)
+    var bySchoolOut = [];
+
+    function initYears(yrs) {
+      years = yrs; Y = yrs.length;
+      counts = []; atRiskOrWorse = []; atRiskLo = []; atRiskHi = [];
+      byRegion = []; byScale = []; downgraded = []; incidence = [];
+      for (var j = 0; j < Y; j++) {
+        counts.push(_mkCounts()); atRiskOrWorse.push(0); atRiskLo.push(0); atRiskHi.push(0);
+        byRegion.push({}); byScale.push({}); downgraded.push(0); incidence.push([]);
+      }
+    }
+
+    for (var ii = 0; ii < idxs.length; ii++) {
+      var idx = idxs[ii], sSim = bySchoolMap[idx], sm = schoolsMeta[+idx] || {};
+      var o = {
+        meta: meta, sido: sm.sido, type: sm.type, scale: sm.scale,
+        useCorpSupport: opts.useCorpSupport, sigmaFallback: sigmaFallback,
+        driftTail: opts.driftTail, confirmDelay: opts.confirmDelay
+      };
+      var tl = closureTimeline(sSim, P, o);
+      var tl0 = sameAsBase ? tl : closureTimeline(sSim, baseP, o);
+      if (years == null) initYears(tl.years);
+
+      for (var i = 0; i < Y; i++) {
+        var g = tl.grades[i];
+        counts[i][g]++;
+        if (GRADE_RANK[g] != null && GRADE_RANK[g] >= GRADE_RANK.atrisk) atRiskOrWorse[i]++;
+        var rng = tl.gradeRange[i];
+        if (g !== 'unrated') {
+          if (GRADE_RANK[rng[0]] >= GRADE_RANK.atrisk) atRiskLo[i]++;
+          if (GRADE_RANK[rng[1]] >= GRADE_RANK.atrisk) atRiskHi[i]++;
+        }
+        _bumpTL(byRegion[i], sm.region || '기타', g);
+        _bumpTL(byScale[i], sm.scale || '기타', g);
+        var gb = tl0.grades[i];
+        if (g !== 'unrated' && gb !== 'unrated' && GRADE_RANK[g] > GRADE_RANK[gb]) downgraded[i]++;
+      }
+      if (tl.firstAtRiskYear != null) {
+        var fi = tl.firstAtRiskYear - years[0];
+        if (fi >= 0 && fi < Y) incidence[fi].push(+idx);
+      }
+      bySchoolOut.push({
+        idx: +idx, grades: tl.grades, depletionYear: tl.depletionYear,
+        firstAtRiskYear: tl.firstAtRiskYear, firstCriticalYear: tl.firstCriticalYear
+      });
+    }
+
+    var perYear = [];
+    for (var y = 0; y < Y; y++) {
+      perYear.push({
+        year: years[y], counts: counts[y], atRiskOrWorse: atRiskOrWorse[y],
+        atRiskRange: [atRiskLo[y], atRiskHi[y]],
+        byRegion: byRegion[y], byScale: byScale[y],
+        newAtRisk: { count: incidence[y].length, schools: incidence[y] },
+        downgradedVsBase: downgraded[y]
+      });
+    }
+
+    return {
+      years: years, perYear: perYear, bySchool: bySchoolOut,
+      honesty: { base: TL_BASE, validatedTo: TL_VALIDATED_TO, driftDataTo: TL_DRIFT_TO, horizonTo: years[Y - 1] },
+      bandSrc: sigmaFallback.global != null ? 'group/global' : 'none'
+    };
+  }
+
   // ── 전역 노출 ───────────────────────────────────────────
   global.SIM = {
     project: project,
@@ -627,6 +958,8 @@
     residualBand: residualBand,
     closureGrade: closureGrade,
     closureAggregate: closureAggregate,
+    closureTimeline: closureTimeline,
+    closureAggregateTimeline: closureAggregateTimeline,
     // 내부 유틸(테스트·트랙 C 편의)
     _util: {
       reductionOf: reductionOf, piRateOf: piRateOf, cumDrift: cumDrift,
@@ -634,7 +967,8 @@
       marginClass: marginClass, bufferClass: bufferClass, matrixGrade: matrixGrade,
       applyOverrides: applyOverrides, runwayRollforward: runwayRollforward,
       runwayFromMonths: runwayFromMonths, CLOSURE_MATRIX: CLOSURE_MATRIX,
-      GRADE_RANK: GRADE_RANK
+      GRADE_RANK: GRADE_RANK, GRADE_BY_RANK: GRADE_BY_RANK,
+      phaseOf: _phaseOf, buildSigmaFallback: _buildSigmaFallback, timelineWindow: _timelineWindow
     }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SIM;

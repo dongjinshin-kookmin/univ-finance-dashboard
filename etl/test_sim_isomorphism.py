@@ -62,6 +62,9 @@ SUPP_PARAMS = [
     {"r": 0.2, "t0": 2025, "horizon": 10, "lambda": 1.0, "piMode": "half"},           # λ 최대 + half
     {"r": 0.15, "t0": 2025, "horizon": 10, "fMax": 0.8, "fillMode": "realistic"},     # fMax<f0 → fMaxEff 가드
     {"r": 0.15, "t0": 2025, "horizon": 10, "eta5120": 0.5, "piMode": "cap"},          # 5120 탄력 상한
+    {"r": 0.3, "t0": 2025, "horizon": 20, "rStart": 2030},                            # rStart 온셋 디커플(시간축)
+    {"r": 0.3, "t0": 2025, "horizon": 20, "rStart": 2030, "profile": "linear", "rampYears": 4},  # rStart+선형램프
+    {"r": 0.3, "t0": 2025, "horizon": 20, "rStart": 2030, "piMode": "cap", "lambda": 0.5},       # rStart+π캐리+드리프트
 ]
 
 

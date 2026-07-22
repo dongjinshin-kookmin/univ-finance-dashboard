@@ -44,17 +44,19 @@ def clamp0(x):
 def reduction_of(params, c):
     t0 = params["t0"]
     r = params.get("r") or 0            # params.r || 0
+    # 감축 온셋 디커플(설계 §2.4, 가법·후방호환): rStart 미지정 → t0(기존과 동일).
+    onset = params["rStart"] if params.get("rStart") is not None else t0
     rsched = params.get("rSchedule")
     if rsched:                          # 명시 스케줄 우선
         v = rsched.get(str(c))
         if v is not None:
             return v
-        return 0 if c < t0 else r
-    if c < t0:
+        return 0 if c < onset else r
+    if c < onset:
         return 0
     if (params.get("profile") or "immediate") == "linear":
         ramp = params.get("rampYears") or 5
-        return r * min(1, (c - t0 + 1) / ramp)
+        return r * min(1, (c - onset + 1) / ramp)
     return r                            # immediate
 
 
@@ -106,6 +108,7 @@ def resolve_params(params, meta):
         "profile": pv("profile") or "immediate",
         "rampYears": pv("rampYears") or 5,
         "rSchedule": pv("rSchedule") or None,
+        "rStart": pv("rStart") if pv("rStart") is not None else None,   # 감축 온셋(설계 §2.4)
         "fillMode": pv("fillMode") or "realistic",
         "beta": pv("beta") if pv("beta") is not None else (dd("beta") if dd("beta") is not None else 0.5),
         "fMax": pv("fMax") if pv("fMax") is not None else 1.0,
