@@ -374,6 +374,8 @@
     outlook:   '<path d="M3 3v18h18"/><path d="M20 8l-6 7-4-3-5 6"/><circle cx="20" cy="8" r="1.4"/>',
     shield:    '<path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
     simulation:'<path d="M4 7h9"/><circle cx="16" cy="7" r="2.4"/><path d="M18.5 7H20"/><path d="M4 12h2.5"/><circle cx="10" cy="12" r="2.4"/><path d="M12.5 12H20"/><path d="M4 17h11"/><circle cx="18" cy="17" r="2.4"/>',
+    sim_individual:'<path d="M4 7h9"/><circle cx="16" cy="7" r="2.4"/><path d="M18.5 7H20"/><path d="M4 12h2.5"/><circle cx="10" cy="12" r="2.4"/><path d="M12.5 12H20"/><path d="M4 17h11"/><circle cx="18" cy="17" r="2.4"/>',
+    sim_national:'<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M9 6h6M9 18h6M6 9v6M18 9v6"/>',
     settings:  '<circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/>'
   };
   function svgIcon(name) {
@@ -494,7 +496,8 @@
     { id: 'compare', label: '대학 비교', title: '대학 비교', eyebrow: 'Comparison · 코호트 벤치마크' },
     { id: 'crisis', label: '위기 진단', title: '위기 진단', eyebrow: 'Risk Diagnosis · 구조 리스크 지수(참고용)' },
     { id: 'outlook', label: '구조 전망', title: '구조 전망', eyebrow: 'Outlook · 학령인구 절벽과 수요-공급' },
-    { id: 'simulation', label: '감축 시뮬레이션', title: '입학정원 감소 시뮬레이션', eyebrow: 'Simulation · 정원 감축 시나리오 (베타 · 가정 기반)' },
+    { id: 'sim_individual', label: '감축 시뮬레이션(개별)', title: '입학정원 감축 시뮬레이션 — 개별 대학', eyebrow: 'Simulation · 개별 대학 정원 감축 시나리오 (베타 · 가정 기반)' },
+    { id: 'sim_national', label: '감축 시뮬레이션(전국)', title: '입학정원 감축 시뮬레이션 — 전국·코호트 집계', eyebrow: 'Simulation · 모집단 폐교위험 집계·20년 시간축 (베타 · 가정 기반)' },
     { id: 'data', label: '데이터·검증', title: '데이터 · 검증', eyebrow: 'Data · 항등식 검증과 원장' },
     { id: 'settings', label: '기본설정', title: '기본설정', eyebrow: 'Settings · 메인 대학 · 경쟁대학 · 기준군', foot: true },
   ];
@@ -513,6 +516,8 @@
 
   function refresh() { renderFilterbar(); render(); }
   function render() {
+    // 구 딥링크/상태(S.tab==='simulation') → 새 개별/전국 탭으로 리다이렉트(모드 인지)
+    if (S.tab === 'simulation') S.tab = (S.sim_mode === 'cohort') ? 'sim_national' : 'sim_individual';
     renderTabs();
     var t = TABS.filter(function (x) { return x.id === S.tab; })[0];
     document.body.setAttribute('data-tab', S.tab);   // 홈에서 스테이지 대형 타이틀 숨김(CSS)
@@ -523,7 +528,7 @@
     syncWorkspaceButton();
     var v = document.getElementById('view');
     v.innerHTML = '';
-    ({ home: renderHome, overview: renderOverview, structure: renderStructure, accounts: renderAccounts, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, simulation: renderSimulation, data: renderData, settings: renderSettings })[S.tab](v);
+    ({ home: renderHome, overview: renderOverview, structure: renderStructure, accounts: renderAccounts, timeseries: renderTimeseries, compare: renderCompare, crisis: renderCrisis, outlook: renderOutlook, sim_individual: renderSimIndividual, sim_national: renderSimNational, data: renderData, settings: renderSettings })[S.tab](v);
   }
 
   // ═══════════════════════════════════════════════════════
@@ -759,7 +764,8 @@
     { id: 'compare',    c: 'var(--series-4)', desc: '최대 8개 대학 나란히 비교하고 랭킹 확인' },
     { id: 'crisis',     c: 'var(--series-7)', desc: '충원율×등록금의존율 매트릭스와 구조 리스크 지수' },
     { id: 'outlook',    c: 'var(--series-6)', desc: '학령인구 절벽과 권역별 수요-공급 전망' },
-    { id: 'simulation', c: 'var(--kmu)',      desc: '입학정원 감축 시나리오의 수입·수지·KPI 파급(베타)' },
+    { id: 'sim_individual', c: 'var(--kmu)',     desc: '개별 대학 정원 감축의 수입·수지·KPI 파급과 존속위험 판정(베타)' },
+    { id: 'sim_national',   c: 'var(--serious)', desc: '전국·수도권·경쟁 모집단의 폐교위험 집계와 20년 시간축 관찰(베타)' },
     { id: 'data',       c: 'var(--series-1)', desc: '원데이터 탐색, 항등식 검증, CSV 다운로드' },
   ];
   function goTab(id) { S.tab = id; closeDrawer(); window.scrollTo(0, 0); render(); }
@@ -2516,46 +2522,65 @@
     return out;
   }
 
-  // 코호트 집계 대상 기준군(전국/수도권/경쟁) — 세션 상태(사이드바 필터와 독립 축, §4)
+  // 집계 대상 모집단(전국/수도권/경쟁) — 세션 상태(사이드바 필터와 독립 축, §4).
+  // 폐교위험 판정·20년 시간축은 학교형태 무관 전 유형(대학·전문대·대학원대·사이버) 위에서 판정하므로
+  // 모집단은 typeFilter를 적용하는 BENCH(전국=대학형태) 대신 학교 메타(region)로 직접 정의한다:
+  //   national  = 전 학교(SIMD 전량 · 폐교판정 유니버스 344) → r=0 회귀 2025 위험+ = 38 유지
+  //   metro     = region==='수도권' 전 학교(전 유형)
+  //   competitor= 경쟁대학(COMP_IDS)
   var SIM_AGG_POP = 'national';
   var SIM_AGG_LABEL = { national: '전국', metro: '수도권', competitor: '경쟁대학' };
+  // 모집단 id 집합(폐교판정 유니버스 기준 · sim 엔트리 보유분).
+  function simPopIds(pop) {
+    if (pop === 'competitor') return COMP_IDS.filter(function (i) { return simEntry(i); });
+    var out = [];
+    Object.keys(SIMD.bySchool).forEach(function (k) {
+      var i = +k, sm = schools[i] || {};
+      if (pop === 'metro' && sm.region !== '수도권') return;
+      out.push(i);
+    });
+    return out;
+  }
+  function simPopCount(pop) { return simPopIds(pop).length; }
+  // 선택 모집단만 담은 시뮬 데이터(엔진 무수정 · bySchool 부분맵 주입으로 모집단 제한).
+  function simDataForPop(pop) {
+    var map = {};
+    simPopIds(pop).forEach(function (i) { var e = simEntry(i); if (e) map[String(i)] = e; });
+    return { bySchool: map, meta: SIMD.meta };
+  }
   function simAggChips() {
-    var cnt = BENCH.counts();
-    var opts = [{ k: 'national', l: '전국', n: cnt.national }, { k: 'metro', l: '수도권', n: cnt.metro }, { k: 'competitor', l: '경쟁', n: cnt.competitor }];
+    var opts = [{ k: 'national', l: '전국' }, { k: 'metro', l: '수도권' }, { k: 'competitor', l: '경쟁' }];
     var row = h('div', { class: 'chip-row' });
     opts.forEach(function (o) {
-      row.appendChild(h('button', { class: 'chip' + (SIM_AGG_POP === o.k ? ' on' : ''), text: o.l + ' ' + o.n + '교', onClick: function () { SIM_AGG_POP = o.k; render(); } }));
+      row.appendChild(h('button', { class: 'chip' + (SIM_AGG_POP === o.k ? ' on' : ''), text: o.l + ' ' + simPopCount(o.k) + '교', onClick: function () { SIM_AGG_POP = o.k; render(); } }));
     });
     return row;
   }
-  function renderSimulation(v) {
-    if (!HAS_SIM) {
-      v.appendChild(h('div', { class: 'card' }, [
-        h('h3', { text: '시뮬레이션 데이터 없음' }),
-        h('p', { class: 'hint', text: 'sim 블록 또는 sim_model.js 계산 엔진이 로드되지 않았습니다.' }),
-      ]));
-      return;
-    }
+  function simNoData(v) {
+    v.appendChild(h('div', { class: 'card' }, [
+      h('h3', { text: '시뮬레이션 데이터 없음' }),
+      h('p', { class: 'hint', text: 'sim 블록 또는 sim_model.js 계산 엔진이 로드되지 않았습니다.' }),
+    ]));
+  }
+  var SIM_BETA_PILL = '<i></i>베타 · 가정 기반 — 재학 전개(L1) 3% 게이트 미달, 수입 델타는 검증됨(skill 0.46)';
+
+  // ── 감축 시뮬레이션(개별): 학교 선택 + 파라미터 → 개별 대학 결과 ──
+  function renderSimIndividual(v) {
+    if (!HAS_SIM) { simNoData(v); return; }
     var sid = S.sim_school;
     if (!simEntry(sid)) { S.sim_school = MAIN_ID; sid = MAIN_ID; }
     var entry = simEntry(sid);
     var P = S.sim_params;
 
-    // ── 상단 컨트롤: 모드 + 대학 검색 + 초기화 + 베타 배지 ──
-    var modeChips = h('div', { class: 'chip-row' }, [
-      h('button', { class: 'chip' + (S.sim_mode === 'single' ? ' on' : ''), text: '개별 대학', onClick: function () { S.sim_mode = 'single'; render(); } }),
-      h('button', { class: 'chip' + (S.sim_mode === 'cohort' ? ' on' : ''), text: '코호트 집계', onClick: function () { S.sim_mode = 'cohort'; render(); } }),
-    ]);
     var searchWrap = buildSchoolSearch(sid, function (i) { S.sim_school = i; S.sim_focus = null; render(); }, 240);
     var resetBtn = h('button', { class: 'chip', text: '↺ 파라미터 초기화', onClick: function () { S.sim_params = defaultSimParams(); S.sim_focus = null; render(); } });
     v.appendChild(h('div', { class: 'row-controls sim-top' }, [
-      ctrl('보기 모드', modeChips),
-      S.sim_mode === 'single' ? ctrl('대학 (검색 · 기본 ' + MAIN_NAME + ')', searchWrap) : ctrl('집계 대상 (기준군)', simAggChips()),
+      ctrl('대학 (검색 · 기본 ' + MAIN_NAME + ')', searchWrap),
       ctrl(' ', resetBtn),
-      h('span', { class: 'pill warn sim-beta', html: '<i></i>베타 · 가정 기반 — 재학 전개(L1) 3% 게이트 미달, 수입 델타는 검증됨(skill 0.46)' }),
+      h('span', { class: 'pill warn sim-beta', html: SIM_BETA_PILL }),
     ]));
 
-    // ── 파라미터 패널 + 결과 (파라미터 변경 시 결과만 debounce 재계산) ──
+    // 파라미터는 전국 탭과 S.sim_params 단일 소스를 공유(한쪽 변경 → 양쪽 반영).
     var resultsBox = h('div', { class: 'sim-results' });
     v.appendChild(h('div', { class: 'sim-grid' }, [buildSimParamPanel(P, scheduleUpdate), resultsBox]));
 
@@ -2563,12 +2588,34 @@
     function scheduleUpdate() { clearTimeout(deb); deb = setTimeout(updateResults, 110); }
     function updateResults() {
       resultsBox.innerHTML = '';
-      try {
-        if (S.sim_mode === 'cohort') buildSimAggregate(resultsBox, P);
-        else buildSimResults(resultsBox, sid, entry, P);
-      } catch (e) {
-        resultsBox.appendChild(h('div', { class: 'card' }, [h('h3', { text: '계산 오류' }), h('p', { class: 'hint', text: String((e && e.message) || e) })]));
-      }
+      try { buildSimResults(resultsBox, sid, entry, P); }
+      catch (e) { resultsBox.appendChild(h('div', { class: 'card' }, [h('h3', { text: '계산 오류' }), h('p', { class: 'hint', text: String((e && e.message) || e) })])); }
+    }
+    updateResults();
+  }
+
+  // ── 감축 시뮬레이션(전국): 집계 대상(모집단) + 파라미터 → 폐교위험 집계·시간축·코호트 ──
+  function renderSimNational(v) {
+    if (!HAS_SIM) { simNoData(v); return; }
+    var P = S.sim_params;
+
+    var resetBtn = h('button', { class: 'chip', text: '↺ 파라미터 초기화', onClick: function () { S.sim_params = defaultSimParams(); render(); } });
+    v.appendChild(h('div', { class: 'row-controls sim-top' }, [
+      ctrl('집계 대상 (모집단)', simAggChips()),
+      ctrl(' ', resetBtn),
+      h('span', { class: 'pill warn sim-beta', html: SIM_BETA_PILL }),
+    ]));
+
+    // 파라미터는 개별 탭과 S.sim_params 단일 소스를 공유(한쪽 변경 → 양쪽 반영).
+    var resultsBox = h('div', { class: 'sim-results' });
+    v.appendChild(h('div', { class: 'sim-grid' }, [buildSimParamPanel(P, scheduleUpdate), resultsBox]));
+
+    var deb = null;
+    function scheduleUpdate() { clearTimeout(deb); deb = setTimeout(updateResults, 110); }
+    function updateResults() {
+      resultsBox.innerHTML = '';
+      try { buildSimAggregate(resultsBox, P); }
+      catch (e) { resultsBox.appendChild(h('div', { class: 'card' }, [h('h3', { text: '계산 오류' }), h('p', { class: 'hint', text: String((e && e.message) || e) })])); }
     }
     updateResults();
   }
@@ -2899,13 +2946,14 @@
     if (!mk || !mk.length) return;
     var mOrig = mk[0].original['운영수지율'];
     var mProj = mk[mk.length - 1].primed['운영수지율'];
-    var grpMed = BENCH.kpiStats(grp, '운영수지율', Y_LAST);
+    // 모집단 중앙값 — 칩 선택 모집단(전국=344·수도권=전 유형·경쟁)과 동일 집합에서 산출(BENCH typeFilter 미적용).
+    var grpMed = BENCH.cohortStats(simPopIds(grp), function (sid, y) { return kv('운영수지율', sid, y); }, Y_LAST);
     var med = grpMed ? grpMed.p50 : null, medN = grpMed ? grpMed.n : 0;
-    var grpLabel = SIM_AGG_LABEL[grp] || '기준군';
+    var grpLabel = SIM_AGG_LABEL[grp] || '모집단';
     box.appendChild(h('div', { class: 'card' }, [
-      cardHead('scale', 'var(--main)', '기준군 요약 — 본교 투영 vs ' + grpLabel + ' 중앙값',
+      cardHead('scale', 'var(--main)', '모집단 요약 — 본교 투영 vs ' + grpLabel + ' 중앙값',
         MAIN_NAME + ' 운영수지율 투영(' + mYears[0] + '→' + mYears[mYears.length - 1] + ') 대비 ' + grpLabel + ' 현재(' + Y_LAST + ') 중앙값',
-        '우리 대학의 운영수지율이 감축을 거치며 어디로 향하는지를, 선택한 기준군의 현재 중간값과 견줘 보여준다.'),
+        '우리 대학의 운영수지율이 감축을 거치며 어디로 향하는지를, 선택한 모집단의 현재 중간값과 견줘 보여준다.'),
       h('div', { class: 'bench' }, [
         h('div', { class: 'bench-row' }, [
           h('div', { class: 'bench-head' }, [h('span', { class: 'bench-name', text: '본교 운영수지율 (원값→투영)' }), h('span', { class: 'bench-n', text: mYears[0] + '→' + mYears[mYears.length - 1] })]),
@@ -2947,6 +2995,15 @@
              lo: py.atRiskRange[0], hi: py.atRiskRange[1] };
   }
 
+  // 스택영역 세로축 눈금 — 모집단 크기(total)에 맞춰 0~total 사이 ~5눈금(소수 모집단은 정수 스텝).
+  function heroYTicks(total) {
+    if (!total || total <= 0) return [0];
+    if (total <= 8) { var a = []; for (var i = 0; i <= total; i++) a.push(i); return a; }
+    var step = Math.max(1, Math.round(total / 4)), t = [];
+    for (var c = 0; c <= total; c += step) t.push(c);
+    if (t[t.length - 1] !== total) t.push(total);
+    return t;
+  }
   // ── 히어로 스택영역(인라인 SVG · 정직성 3구간 · σ(t) 확대밴드 · incidence · 플레이헤드) ──
   function closureTimelineHero(tl, total) {
     var years = tl.years, VBW = 920, VBH = 340, ML = 46, MR = 14, MT = 34, MB = 64;
@@ -3001,7 +3058,7 @@
     });
     // 축·구간 라벨
     [2025, 2030, 2035, 2040, 2045].forEach(function (yr) { s.push('<text x="' + xF(yr).toFixed(1) + '" y="' + (VBH - 6) + '" class="clo-hero-xlab">' + yr + '</text>'); });
-    [0, 86, 172, 258, 344].forEach(function (c) { s.push('<text x="' + (x0 - 6) + '" y="' + (yF(c) + 3).toFixed(1) + '" class="clo-hero-ylab">' + c + '</text>'); });
+    heroYTicks(total).forEach(function (c) { s.push('<text x="' + (x0 - 6) + '" y="' + (yF(c) + 3).toFixed(1) + '" class="clo-hero-ylab">' + c + '</text>'); });
     s.push('<text x="' + ((x0 + xF(2029.5)) / 2).toFixed(1) + '" y="' + (y0 - 8) + '" class="clo-phase-lab">검증 26–29</text>');
     s.push('<text x="' + ((xF(2029.5) + xF(2040.5)) / 2).toFixed(1) + '" y="' + (y0 - 8) + '" class="clo-phase-lab">투영 30–40</text>');
     s.push('<text x="' + ((xF(2040.5) + x1) / 2).toFixed(1) + '" y="' + (y0 - 8) + '" class="clo-phase-lab warn">관찰용 외삽 41–45</text>');
@@ -3027,7 +3084,8 @@
   // ── 권역 타일맵(1교=1타일 · 정적 정렬로 위험 프런티어 전진 · 등급변화 하이라이트) ──
   function closureTilemap(tl) {
     var y0 = tl.years[0];
-    var wrap = h('div', { class: 'clo-tilemap' });
+    var sparse = tl.bySchool.length <= 24;   // 소수 모집단(경쟁 등) → 타일 크게 + 대학명 표기
+    var wrap = h('div', { class: 'clo-tilemap' + (sparse ? ' sparse' : '') });
     var tiles = [], groups = [];
     CLOSURE_REGION_ORDER.forEach(function (region) {
       var members = tl.bySchool.filter(function (sc) { return (schools[sc.idx] && schools[sc.idx].region) === region; });
@@ -3046,7 +3104,9 @@
       members.forEach(function (sc) {
         var sm = schools[sc.idx] || {};
         var mk = (sc.idx === MAIN_ID || sc.idx === KMU_ID) ? '★' : (COMP_IDS.indexOf(sc.idx) >= 0 ? '◆' : '');
-        var el = h('div', { class: 'clo-tile', html: mk ? '<span class="clo-tile-mk">' + mk + '</span>' : '' });
+        var inner = mk ? '<span class="clo-tile-mk">' + mk + '</span>' : '';
+        if (sparse) inner += '<span class="clo-tile-name">' + (sm.n || '') + '</span>';
+        var el = h('div', { class: 'clo-tile', html: inner });
         el.__sc = sc; el.__sm = sm;
         grid.appendChild(el); gtiles.push(el); tiles.push(el);
       });
@@ -3073,16 +3133,18 @@
   }
 
   // ── 시간축 관찰 섹션 조립(컨트롤 바 · 히어로 · 타일맵) — 파라미터당 사전계산 1회 ──
-  function buildTimelineSection(box, P) {
+  function buildTimelineSection(box, P, popKey) {
+    popKey = popKey || 'national';
+    var popLabel = SIM_AGG_LABEL[popKey] || '전국';
     var tl;
-    try { tl = ENG.closureAggregateTimeline(SIMD, timelineParams(P), { meta: SIMD.meta, schools: schools, useCorpSupport: !!P.useCorpSupport }); }
+    try { tl = ENG.closureAggregateTimeline(simDataForPop(popKey), timelineParams(P), { meta: SIMD.meta, schools: schools, useCorpSupport: !!P.useCorpSupport }); }
     catch (e) { box.appendChild(h('div', { class: 'card' }, [h('p', { class: 'hint', text: '시간축 계산 오류: ' + ((e && e.message) || e) })])); return; }
     S.sim_tl = tl;
     var total = 0; CLOSURE_STACK_ORDER.forEach(function (k) { total += tl.perYear[0].counts[k]; });
     var year = S.sim_tl_year; if (year == null || year < TL_YEAR_MIN || year > TL_YEAR_MAX) year = TL_YEAR_MIN;
 
     var card = h('div', { class: 'card sim-closure clo-timeline' });
-    card.appendChild(cardHead('outlook', 'var(--serious)', '20년 시간축 관찰 (2026~2045)', '이 조건이 이어질 때 위험/안정 대학이 20년에 걸쳐 어떻게 갈리는가 · 슬라이더/재생으로 천천히 관찰',
+    card.appendChild(cardHead('outlook', 'var(--serious)', '20년 시간축 관찰 (2026~2045) — ' + popLabel + ' ' + total + '개교', '이 조건이 이어질 때 위험/안정 대학이 20년에 걸쳐 어떻게 갈리는가 · 슬라이더/재생으로 천천히 관찰',
       '아래 그래프의 색 띠는 연도마다 각 등급(안정~심각)에 속한 대학 수를 쌓은 것. 붉은 띠가 두꺼워질수록 위험 대학이 늘어난다는 뜻이며, 슬라이더나 재생으로 연도를 움직여 관찰한다(통계적 예측이 아닌 관찰용 확장).'));
     card.appendChild(h('span', { class: 'pill warn sim-beta-inline', html: '<i></i>관찰용 외삽 — 통계적 예측 아님 · 4년 백테스트를 20년으로 확장(σ 시간확대)' }));
 
@@ -3100,7 +3162,7 @@
     var hero = closureTimelineHero(tl, total);
     card.appendChild(h('div', { class: 'clo-tl-hero' }, [hero.node]));
 
-    card.appendChild(h('div', { class: 'clo-tl-caption', html: '<b>전국 ' + total + '개 대학 타일맵</b> — 1교=1타일 · 권역 그룹 · 등급색 · 직전 연도 대비 등급 악화 타일 강조(★ 본교 · ◆ 경쟁대학)' }));
+    card.appendChild(h('div', { class: 'clo-tl-caption', html: '<b>' + popLabel + ' ' + total + '개 대학 타일맵</b> — 1교=1타일 · 권역 그룹 · 등급색 · 직전 연도 대비 등급 악화 타일 강조(★ 본교 · ◆ 경쟁대학)' }));
     var tm = closureTilemap(tl);
     card.appendChild(tm.node);
 
@@ -3159,13 +3221,14 @@
   }
 
   function buildSimAggregate(box, P) {
-    buildTimelineSection(box, P);   // C7~C9 — 20년 시간축 관찰 (설계 §3, 정보위계 최상단 히어로)
-    buildClosureAggPanel(box, P);   // C6 — 폐교위험 판정 (전국 344교 · §6 정보위계, 필터 무관)
-    var grpLabel = SIM_AGG_LABEL[SIM_AGG_POP] || '기준군';
-    box.appendChild(h('div', { class: 'sim-sep-h', html: '<span>코호트 수입·수지 집계 (' + grpLabel + ' 기준군)</span>' }));
-    // 기준군 요약행 — 본교 투영 KPI vs 군 중앙값 궤적(§4)
-    simBenchSummary(box, SIM_AGG_POP, P);
-    var pop = BENCH.idsFor(SIM_AGG_POP).filter(function (sid) { return simEntry(sid); });
+    var popKey = SIM_AGG_POP;
+    var grpLabel = SIM_AGG_LABEL[popKey] || '기준군';
+    buildTimelineSection(box, P, popKey);   // C7~C9 — 20년 시간축 관찰 (모집단 반영, 설계 §3)
+    buildClosureAggPanel(box, P, popKey);   // C6 — 폐교위험 판정 (모집단 반영 · §6 정보위계)
+    box.appendChild(h('div', { class: 'sim-sep-h', html: '<span>코호트 수입·수지 집계 (' + grpLabel + ' 모집단)</span>' }));
+    // 모집단 요약행 — 본교 투영 KPI vs 모집단 중앙값 궤적(§4)
+    simBenchSummary(box, popKey, P);
+    var pop = simPopIds(popKey).filter(function (sid) { return simEntry(sid); });
     var years = null, n = 0, respN = 0;
     var sOpt, sBas, sPes, sBase, oOpt, oBas, oPes, oOrig;
     pop.forEach(function (sid) {
@@ -3206,7 +3269,7 @@
       });
       return c;
     }
-    box.appendChild(fanCard('코호트 등록금수입(5100) 합계 — ' + n + '개교(' + respN + '개 반응)', grpLabel + ' 기준군 · 3종 시나리오 레벨 합', 'data', col, sOpt, sBas, sPes, sBase, false,
+    box.appendChild(fanCard('코호트 등록금수입(5100) 합계 — ' + n + '개교(' + respN + '개 반응)', grpLabel + ' 모집단 · 3종 시나리오 레벨 합', 'data', col, sOpt, sBas, sPes, sBase, false,
       '선택한 기준군에 속한 대학들의 등록금 수입을 모두 더해, 정원 감축이 집단 전체 수입에 미치는 영향을 세 시나리오로 보여준다.'));
     box.appendChild(fanCard('코호트 운영수지 합계', '3종 시나리오 · 0선 = 흑자/적자 경계', 'scale', 'var(--series-2)', oOpt, oBas, oPes, oOrig, true,
       '기준군 전체의 운영수지(흑자/적자)를 합산해 집단 차원의 영향을 세 시나리오로 보여준다. 0선 아래는 집단 합계가 적자라는 뜻.'));
@@ -3281,11 +3344,13 @@
     return card;
   }
 
-  // ── 전 학교 등급 재계산(학교별 배지 테이블용, 현재 시나리오) ──
-  function perSchoolClosure(P) {
+  // ── 학교 등급 재계산(학교별 배지 테이블용, 현재 시나리오) — 모집단 제한 ──
+  function perSchoolClosure(P, popKey) {
     var out = [], bs = SIMD.bySchool;
-    Object.keys(bs).forEach(function (idx) {
-      var i = +idx, e = bs[idx], sm = schools[i] || {};
+    var ids = popKey ? simPopIds(popKey) : Object.keys(bs).map(function (k) { return +k; });
+    ids.forEach(function (i) {
+      var e = bs[String(i)]; if (!e) return;
+      var sm = schools[i] || {};
       var o = { meta: SIMD.meta, sido: sm.sido, type: sm.type, useCorpSupport: !!P.useCorpSupport };
       out.push({ idx: i, name: sm.n, cg: ENG.closureGrade(e, ENG.project(e, P, o), o) });
     });
@@ -3313,8 +3378,8 @@
   }
 
   // ── 학교별 배지 테이블 (등급순, 상위 N + 더보기) ──
-  function closureSchoolTable(P) {
-    var rows = perSchoolClosure(P).filter(function (r) { return r.cg.grade !== 'unrated'; });
+  function closureSchoolTable(P, popKey) {
+    var rows = perSchoolClosure(P, popKey).filter(function (r) { return r.cg.grade !== 'unrated'; });
     var RANK = ENG._util.GRADE_RANK;
     rows.sort(function (a, b) {
       var d = RANK[b.cg.grade] - RANK[a.cg.grade];
@@ -3327,7 +3392,7 @@
     var shown = showAll ? rows : rows.slice(0, LIMIT);
     var card = h('div', { class: 'card sim-closure' });
     card.appendChild(cardHead('data', 'var(--series-1)', '학교별 판정 (위험도순)', rows.length + '개교 · 미분류 제외 · 위험도 높은 순',
-      '전국 대학을 위험도가 높은 순서로 줄 세운 표. 각 대학의 등급, 적립금 소진 예상 시점, 판정 근거를 확인할 수 있다.'));
+      '선택한 모집단의 대학을 위험도가 높은 순서로 줄 세운 표. 각 대학의 등급, 적립금 소진 예상 시점, 판정 근거를 확인할 수 있다.'));
     var tbl = h('table', { class: 'data' });
     tbl.appendChild(h('thead', {}, [h('tr', {}, ['대학', '등급', '소진예상', 'M(운영수지율)', '충원율', '근거 게이트'].map(function (t) { return h('th', { text: t }); }))]));
     var tb = h('tbody');
@@ -3367,16 +3432,18 @@
     return card;
   }
 
-  // ── 집계 판정 패널 (설계 §6 정보위계 7항목) ──
-  function buildClosureAggPanel(box, P) {
-    var agg = ENG.closureAggregate(SIMD, P, { meta: SIMD.meta, schools: schools, useCorpSupport: !!P.useCorpSupport });
+  // ── 집계 판정 패널 (설계 §6 정보위계 7항목) — 모집단 반영 ──
+  function buildClosureAggPanel(box, P, popKey) {
+    popKey = popKey || 'national';
+    var popLabel = SIM_AGG_LABEL[popKey] || '전국';
+    var agg = ENG.closureAggregate(simDataForPop(popKey), P, { meta: SIMD.meta, schools: schools, useCorpSupport: !!P.useCorpSupport });
     var total = 0; CLOSURE_STACK_ORDER.forEach(function (k) { total += agg.counts[k]; });
     var N = agg.atRiskOrWorse, rng = agg.atRiskRange, tr = agg.transitions;
 
     // 1) 헤드라인
     var head = h('div', { class: 'card sim-closure clo-headline' });
-    head.appendChild(cardHead('crisis', 'var(--serious)', '폐교(존속) 위험 판정 — 전국 ' + total + '개교', '이 조건이 이어질 경우의 재정 존속위험 · 필터 무관 전국 기준',
-      '현재 조건에서 전국 대학 중 재정적으로 위험한 곳이 몇 개인지 집계한다. 재정 존속위험을 뜻하며 폐교가 확정됐다는 의미는 아니다.'));
+    head.appendChild(cardHead('crisis', 'var(--serious)', '폐교(존속) 위험 판정 — ' + popLabel + ' ' + total + '개교', '이 조건이 이어질 경우의 재정 존속위험 · ' + popLabel + ' 모집단 ' + total + '개교 중',
+      '현재 조건에서 ' + popLabel + ' 모집단 대학 중 재정적으로 위험한 곳이 몇 개인지 집계한다. 재정 존속위험을 뜻하며 폐교가 확정됐다는 의미는 아니다.'));
     head.appendChild(verifiedPill());
     head.appendChild(h('div', { class: 'clo-hero' }, [
       h('div', { class: 'clo-hero-num' }, [h('span', { class: 'chn-n', text: String(N) }), h('span', { class: 'chn-u', text: '개교' })]),
@@ -3394,8 +3461,8 @@
     ]));
     box.appendChild(head);
 
-    // 1.5) 경쟁대학 등급 — 전국 344교와 동일 기준의 별도 행(§4)
-    if (COMP_IDS.length) {
+    // 1.5) 경쟁대학 등급 — 모집단 판정과 동일 기준의 별도 행(§4). 경쟁 모집단 선택 시엔 중복이라 생략.
+    if (COMP_IDS.length && popKey !== 'competitor') {
       var compCard = h('div', { class: 'card sim-closure' });
       compCard.appendChild(cardHead('compare', 'var(--series-2)', '경쟁대학 폐교위험 등급', '전국 판정과 동일 기준 · 경쟁대학만 별도 표시',
         '전국과 똑같은 기준으로 경쟁대학들의 위험 등급만 따로 뽑아 보여준다.'));
@@ -3420,9 +3487,9 @@
       box.appendChild(compCard);
     }
 
-    // 2) 등급 분포 스택바(344교)
-    box.appendChild(closureStackCard('overview', 'var(--kmu)', '등급 분포', total + '개교 · 슬라이더 연동 실시간', { all: mkBucket(agg.counts) }, ['all'],
-      '전국 대학을 안정·주의·위험·심각 등급으로 나눠, 각 등급에 몇 개교가 있는지 하나의 막대에 쌓아 보여준다.'));
+    // 2) 등급 분포 스택바(모집단)
+    box.appendChild(closureStackCard('overview', 'var(--kmu)', '등급 분포', popLabel + ' ' + total + '개교 · 파라미터 연동 실시간', { all: mkBucket(agg.counts) }, ['all'],
+      '선택한 모집단의 대학을 안정·주의·위험·심각 등급으로 나눠, 각 등급에 몇 개교가 있는지 하나의 막대에 쌓아 보여준다.'));
 
     // 3) 전이 표시
     if (P.r > 0) {
@@ -3443,7 +3510,7 @@
       '대학 규모(대·중·소)별로 위험 등급이 어떻게 나뉘는지 비교해, 위험이 어느 규모에 몰려 있는지 보여준다.'));
 
     // 5) 학교별 배지 테이블
-    box.appendChild(closureSchoolTable(P));
+    box.appendChild(closureSchoolTable(P, popKey));
 
     // 6·7) 검증 참조 + 정직성 푸터
     box.appendChild(closureHonestyCard());
@@ -3770,7 +3837,7 @@
       EXT.population && EXT.population.age18_21.length === EXT.population.sidos.length && EXT.region_outlook.length > 0);
 
     // 3) 각 탭 렌더 후 SVG 노드 > 0 (위기 진단·구조 전망 포함)
-    ['overview', 'structure', 'timeseries', 'compare', 'crisis', 'outlook', 'simulation', 'data'].forEach(function (t) {
+    ['overview', 'structure', 'timeseries', 'compare', 'crisis', 'outlook', 'sim_individual', 'sim_national', 'data'].forEach(function (t) {
       S.tab = t; render();
       var n = document.querySelectorAll('#view svg').length;
       check('탭 ' + t + ' SVG 렌더(' + n + ')', t === 'data' ? true : n > 0);
@@ -3795,7 +3862,7 @@
     var firstCard = homeCards[0];
     if (firstCard) firstCard.click();               // 첫 카드(개요) → overview 탭 전환
     check('홈 랜딩 렌더 + 메뉴 카드 내비게이션',
-      heroOk && homeCards.length === 9 && !!firstCard && S.tab === 'overview' &&
+      heroOk && homeCards.length === 10 && !!firstCard && S.tab === 'overview' &&
       document.querySelectorAll('#view svg').length > 0);
 
     // 7) F.eok 억원 포맷 단위 테스트 (천원 → "1,234.5억원")
@@ -3853,11 +3920,15 @@
       var ssc = ENG.scenarios(se, { r: 0.1, t0: 2025 }, so);
       var lastK = ssc.base.kpis[ssc.base.kpis.length - 1];
       check('시뮬 r=10% 인건비부담률 상승', lastK.delta['인건비부담률'] > 0);
-      S.tab = 'simulation'; S.sim_school = KMU_ID; S.sim_mode = 'single';
+      S.tab = 'sim_individual'; S.sim_school = KMU_ID;
       S.sim_params = defaultSimParams(); S.sim_params.r = 0.1; S.sim_focus = null; render();
-      check('시뮬 탭 SVG 렌더 + 정확도 표', document.querySelectorAll('#view svg').length > 0 &&
+      check('시뮬(개별) 탭 SVG 렌더 + 정확도 표', document.querySelectorAll('#view svg').length > 0 &&
         document.querySelectorAll('#view .sim-bt-tbl tbody tr').length > 0);
       S.sim_params = defaultSimParams();
+
+      // 11-b) 구 딥링크(S.tab='simulation') → 개별 탭 리다이렉트
+      S.tab = 'simulation'; S.sim_mode = 'single'; render();
+      check('구 simulation 딥링크 → sim_individual 리다이렉트', S.tab === 'sim_individual');
 
       // 12) 폐교위험 판정 (C6) — 집계 합·경계밴드·단조성·패널 렌더
       var cOpt = { meta: SIMD.meta, schools: schools };
@@ -3868,12 +3939,27 @@
       var cp10 = defaultSimParams(); cp10.r = 0.1;
       var cagg10 = ENG.closureAggregate(SIMD, cp10, cOpt);
       check('폐교판정 r=10% 위험+ 단조 증가', cagg10.atRiskOrWorse >= cagg0.atRiskOrWorse);
-      S.tab = 'simulation'; S.sim_mode = 'cohort'; S.sim_params = defaultSimParams(); S.sim_params.r = 0.1; render();
+      S.tab = 'sim_national'; SIM_AGG_POP = 'national'; S.sim_params = defaultSimParams(); S.sim_params.r = 0.1; render();
       check('폐교판정 패널 렌더(헤드라인 수치 + 등급칩)',
         document.querySelectorAll('#view .clo-headline .chn-n').length > 0 &&
         document.querySelectorAll('#view .grade-chip').length > 0);
 
-      // 12.5) 시간축 관찰(C7~C9) — 사전계산·회귀·슬라이더 판독·스택영역·타일맵
+      // 12.4) 집계 대상 칩 전환 → 모집단 실변화(전국 344 ≠ 수도권 153 ≠ 경쟁 6 · 타일수·헤드라인 total)
+      SIM_AGG_POP = 'national'; S.sim_params = defaultSimParams(); render();
+      var natTiles = document.querySelectorAll('#view .clo-timeline .clo-tile').length;
+      var natHead = (document.querySelector('#view .clo-headline .card-title, #view .clo-headline h3') || {}).textContent || document.querySelector('#view .clo-headline').textContent;
+      SIM_AGG_POP = 'metro'; render();
+      var metroTiles = document.querySelectorAll('#view .clo-timeline .clo-tile').length;
+      SIM_AGG_POP = 'competitor'; render();
+      var compTiles = document.querySelectorAll('#view .clo-timeline .clo-tile').length;
+      var compSparse = document.querySelectorAll('#view .clo-tilemap.sparse').length > 0;
+      check('집계 칩 모집단 실변화(전국 ' + natTiles + ' > 수도권 ' + metroTiles + ' > 경쟁 ' + compTiles + ' · 경쟁 sparse)',
+        natTiles === simPopCount('national') && metroTiles === simPopCount('metro') &&
+        compTiles === simPopCount('competitor') && natTiles > metroTiles && metroTiles > compTiles && compSparse);
+      SIM_AGG_POP = 'national'; S.sim_params = defaultSimParams(); S.sim_params.r = 0.1; render();
+
+      // 12.5) 시간축 관찰(C7~C9) — 사전계산·회귀·슬라이더 판독·스택영역·타일맵 (전국 모집단)
+      SIM_AGG_POP = 'national'; S.sim_params = defaultSimParams(); render();
       var tlAgg = ENG.closureAggregateTimeline(SIMD, timelineParams(defaultSimParams()), { meta: SIMD.meta, schools: schools });
       check('시간축 base 회귀(2025 위험+=38 · 창 2025~2045)',
         tlAgg.years[0] === 2025 && tlAgg.years[tlAgg.years.length - 1] === 2045 &&
@@ -3889,7 +3975,7 @@
       tlSlider.value = 2045; tlSlider.dispatchEvent(new Event('input'));
       check('시간축 슬라이더 판독 갱신(2045 헤드라인)',
         /2045년/.test(document.querySelector('#view .clo-tl-headline').textContent));
-      S.sim_mode = 'single'; S.sim_params = defaultSimParams(); S.sim_tl_year = 2026;
+      SIM_AGG_POP = 'national'; S.sim_params = defaultSimParams(); S.sim_tl_year = 2026;
     }
 
     S.t2_year = Y_LAST; S.tab = 'overview'; render();

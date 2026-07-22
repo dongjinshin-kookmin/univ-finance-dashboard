@@ -1316,6 +1316,16 @@ body[data-main="other"] .home-hero-scrim { background: linear-gradient(0deg, rgb
 .clo-tile.is-main { outline: 2px solid var(--text-primary); outline-offset: 1px; z-index: 2; }
 .clo-tile.is-comp { outline: 1.5px solid var(--text-secondary); outline-offset: 1px; z-index: 1; }
 .clo-tile.changed { animation: cloTilePulse 0.9s ease-out; box-shadow: 0 0 0 2px var(--text-primary); }
+/* 소수 모집단(경쟁 등) — 타일 크게 + 대학명 표기 */
+.clo-tilemap.sparse .clo-tm-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 7px; }
+.clo-tilemap.sparse .clo-tile { aspect-ratio: auto; min-height: 46px; border-radius: 8px; padding: 6px 8px; gap: 3px; }
+.clo-tilemap.sparse .clo-tile-mk { font-size: 12px; }
+.clo-tile-name {
+  font-size: 0.72rem; font-weight: 720; color: #fff; text-align: center; line-height: 1.16;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.55); pointer-events: none; word-break: keep-all;
+}
+.clo-tilemap.sparse .clo-tile.g-unrated { opacity: 0.62; }
+.clo-tilemap.sparse .clo-tile.g-unrated .clo-tile-name { color: var(--text-primary); text-shadow: none; }
 @keyframes cloTilePulse {
   0% { box-shadow: 0 0 0 3px var(--text-primary); transform: scale(1.28); }
   100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
